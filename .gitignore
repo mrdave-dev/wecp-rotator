@@ -1,0 +1,27 @@
+# Node modules
+node_modules/
+
+# Compiled output
+dist/
+
+# TypeScript build logs
+*.tsbuildinfo
+
+# Local clasp config
+.clasp.json
+
+# System files
+.DS_Store
+Thumbs.db
+
+# VS Code settings
+.vscode/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files (if used)
+.env
