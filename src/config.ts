@@ -40,7 +40,9 @@ function readStartDateFromValues(values: unknown[][]): Date {
 // A paired with a day-of-week name in column B. Requiring an actual
 // checkbox (rather than matching the day name anywhere in column B) keeps a
 // roster entry that happens to be named after a weekday from being mistaken
-// for a header. Throws if the same day appears more than once.
+// for a header. Throws if the same day appears more than once. Computed
+// once per read and shared by both the Stations section and the day blocks,
+// since both need to know where the day headers are.
 function findDayHeaderRows(values: unknown[][]): { row: number; dayIndex: number }[] {
   const headers: { row: number; dayIndex: number }[] = [];
   for (let r = 0; r < values.length; r++) {
@@ -76,8 +78,10 @@ function findDayHeaderRows(values: unknown[][]): { row: number; dayIndex: number
 // the end of the sheet). Blank rows inside a block, and the "Roster"
 // sub-header itself, are simply skipped, so users can leave gaps or insert
 // extra rows without breaking anything.
-function findDayBlocksFromValues(values: unknown[][]): DayBlock[] {
-  const headers = findDayHeaderRows(values);
+function findDayBlocksFromValues(
+  values: unknown[][],
+  headers: { row: number; dayIndex: number }[]
+): DayBlock[] {
   const lastRow = values.length;
 
   return headers.map(function (header, h) {
@@ -96,7 +100,6 @@ function findDayBlocksFromValues(values: unknown[][]): DayBlock[] {
     return {
       dayIndex: header.dayIndex,
       dayName: DAY_NAMES[header.dayIndex],
-      headerRow: header.row,
       included: values[header.row - 1][0] === true,
       rosterCells,
     };
@@ -104,13 +107,18 @@ function findDayBlocksFromValues(values: unknown[][]): DayBlock[] {
 }
 
 function findDayBlocks(sheet: GoogleAppsScript.Spreadsheet.Sheet): DayBlock[] {
-  return findDayBlocksFromValues(readConfigValues(sheet));
+  const values = readConfigValues(sheet);
+  return findDayBlocksFromValues(values, findDayHeaderRows(values));
 }
 
-// Stations are a single list defined once, read from the row after the
-// Stations section label up to (but not including) the first day header —
-// so, like the day blocks, users can insert extra rows freely.
-function readStationsFromValues(values: unknown[][]): string[] {
+// Stations are a single list defined once, read from the Stations label's
+// own row (so a station typed directly next to the label, matching how the
+// start date works, isn't dropped) through the row before the first day
+// header — so, like the day blocks, users can insert extra rows freely.
+function readStationsFromValues(
+  values: unknown[][],
+  headers: { row: number; dayIndex: number }[]
+): string[] {
   let labelRow = -1;
   for (let r = 0; r < values.length; r++) {
     if (normalizeCell(values[r][0]) === STATIONS_SECTION_LABEL) {
@@ -123,13 +131,21 @@ function readStationsFromValues(values: unknown[][]): string[] {
       "Couldn't find the '" + STATIONS_SECTION_LABEL + "' row on the Config sheet."
     );
   }
+  if (headers.length > 0 && labelRow > headers[0].row) {
+    throw new Error(
+      "The '" +
+        STATIONS_SECTION_LABEL +
+        "' section must come before the day blocks (it's currently below " +
+        DAY_NAMES[headers[0].dayIndex] +
+        "). Please move it above all of the days."
+    );
+  }
 
-  const headers = findDayHeaderRows(values);
   const blockEnd = headers.length > 0 ? headers[0].row - 1 : values.length;
 
   const stations: string[] = [];
   const seen: { [name: string]: boolean } = {};
-  for (let row = labelRow + 1; row <= blockEnd; row++) {
+  for (let row = labelRow; row <= blockEnd; row++) {
     const value = normalizeCell(values[row - 1][1]);
     if (value === "") {
       continue;
@@ -147,9 +163,10 @@ function readStationsFromValues(values: unknown[][]): string[] {
 
 function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
   const values = readConfigValues(sheet);
+  const headers = findDayHeaderRows(values);
   const startDate = readStartDateFromValues(values);
-  const stations = readStationsFromValues(values);
-  const blocks = findDayBlocksFromValues(values);
+  const stations = readStationsFromValues(values, headers);
+  const blocks = findDayBlocksFromValues(values, headers);
   const days: DayConfig[] = blocks.map(function (block) {
     return {
       dayIndex: block.dayIndex,

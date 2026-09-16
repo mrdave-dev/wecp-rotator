@@ -44,7 +44,6 @@ function computeAssignments(config: WorkbookConfig): ScheduleAssignment {
       dayIndex: d.dayIndex,
       dayName: d.dayName,
       date: addCalendarDays(config.startDate, tz, entry.offset),
-      roster: d.roster,
     });
 
     config.stations.forEach(function (station, i) {
@@ -57,6 +56,16 @@ function computeAssignments(config: WorkbookConfig): ScheduleAssignment {
 
 function formatDayHeader(day: ScheduledDay): string {
   return day.dayName + "\n" + formatSheetDate(day.date);
+}
+
+// The size of the rectangle (from A1) that writeSchedule will (re)write for
+// a given assignment: the title row, the header row, and one row per
+// station.
+function scheduleGridDimensions(assignment: ScheduleAssignment): { totalRows: number; numCols: number } {
+  return {
+    totalRows: 2 + assignment.stationOrder.length,
+    numCols: assignment.orderedDays.length + 1,
+  };
 }
 
 function readScheduleSnapshot(): ScheduleSnapshot | null {
@@ -94,11 +103,12 @@ function saveScheduleSnapshot(sheet: GoogleAppsScript.Spreadsheet.Sheet, rows: n
 // script AND the exact rectangle it last wrote no longer matches (i.e.
 // someone hand-edited the printed grid since). This only ever looks at that
 // rectangle, so unrelated content elsewhere on the sheet (e.g. announcements
-// below the grid) never counts as a manual edit, and a sheet that's since
-// been deleted or cleared below the saved extent is never flagged either.
+// below the grid) never counts as a manual edit. An empty sheet (cleared, or
+// deleted and recreated) is never flagged either, since there's no manual
+// content left to protect.
 function isScheduleDirty(sheet: GoogleAppsScript.Spreadsheet.Sheet): boolean {
   const saved = readScheduleSnapshot();
-  if (!saved) {
+  if (!saved || sheet.getLastRow() === 0) {
     return false;
   }
   const currentHash = computeGridHash(sheet, saved.rows, saved.cols);
@@ -108,25 +118,76 @@ function isScheduleDirty(sheet: GoogleAppsScript.Spreadsheet.Sheet): boolean {
   return currentHash !== saved.hash;
 }
 
-function writeSchedule(
+// True when (re)writing this assignment would grow the grid into rows or
+// columns beyond what the last generation covered, and some of those cells
+// already hold content — e.g. the grid gained a station or a day and would
+// now overlap hand-maintained content (announcements, notes) that used to
+// sit safely below or beside it. isScheduleDirty can't catch this on its
+// own, since it only ever compares the previously-known rectangle.
+function wouldOverwriteContentOutsideGrid(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
-  config: WorkbookConfig,
   assignment: ScheduleAssignment
-): void {
-  const numCols = assignment.orderedDays.length + 1;
-  const gridRows = assignment.stationOrder.length;
+): boolean {
+  const { totalRows, numCols } = scheduleGridDimensions(assignment);
+  const previous = readScheduleSnapshot();
+  const prevRows = previous ? previous.rows : 0;
+  const prevCols = previous ? previous.cols : 0;
+  if (totalRows <= prevRows && numCols <= prevCols) {
+    return false;
+  }
+
+  const checkRows = Math.min(Math.max(totalRows, prevRows), sheet.getLastRow());
+  const checkCols = Math.min(Math.max(numCols, prevCols), sheet.getLastColumn());
+  if (checkRows <= 0 || checkCols <= 0) {
+    return false;
+  }
+
+  const values = sheet.getRange(1, 1, checkRows, checkCols).getValues();
+  for (let r = 0; r < checkRows; r++) {
+    for (let c = 0; c < checkCols; c++) {
+      if (r < prevRows && c < prevCols) {
+        continue; // already covered by the ordinary hand-edit ("dirty") check
+      }
+      if (normalizeCell(values[r][c]) !== "") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: ScheduleAssignment): void {
+  const { totalRows, numCols } = scheduleGridDimensions(assignment);
   const titleRow = 1;
   const headerRow = 2;
-  const totalRows = headerRow + gridRows;
+  const gridRows = assignment.stationOrder.length;
 
   // Only clear the rectangle this script owns (the title, header, and
   // station rows), unioned with whatever extent was written last time, so a
   // shrinking grid doesn't leave stale cells behind. Anything below or
   // beside that — e.g. announcements the user maintains by hand — is left
-  // untouched.
+  // untouched (see wouldOverwriteContentOutsideGrid, checked by callers
+  // before this runs).
   const previous = readScheduleSnapshot();
-  const clearRows = Math.max(totalRows, previous ? Math.min(previous.rows, sheet.getMaxRows()) : 0);
-  const clearCols = Math.max(numCols, previous ? Math.min(previous.cols, sheet.getMaxColumns()) : 0);
+  let clearRows: number;
+  let clearCols: number;
+  if (previous) {
+    clearRows = Math.max(totalRows, Math.min(previous.rows, sheet.getMaxRows()));
+    clearCols = Math.max(numCols, Math.min(previous.cols, sheet.getMaxColumns()));
+  } else if (PropertiesService.getDocumentProperties().getProperty(LEGACY_SCHEDULE_SNAPSHOT_PROPERTY)) {
+    // Upgrading from a version with no {rows,cols,hash} snapshot at all: that
+    // version always cleared the *whole* sheet before writing, so nothing but
+    // script-owned content could have survived here. Clear everything once so
+    // no stale row/column from that version lingers, then start tracking the
+    // new, scoped snapshot below.
+    clearRows = Math.max(totalRows, sheet.getLastRow());
+    clearCols = Math.max(numCols, sheet.getLastColumn());
+  } else {
+    clearRows = totalRows;
+    clearCols = numCols;
+  }
+  PropertiesService.getDocumentProperties().deleteProperty(LEGACY_SCHEDULE_SNAPSHOT_PROPERTY);
+
   if (clearRows > 0 && clearCols > 0) {
     const clearRange = sheet.getRange(1, 1, clearRows, clearCols);
     // clear() does not unmerge cells on its own; without this, a title
@@ -175,11 +236,10 @@ function writeSchedule(
       .setVerticalAlignment("middle")
       .setBorder(true, true, true, true, true, true);
 
-    assignment.stationOrder.forEach(function (station, i) {
-      sheet
-        .getRange(headerRow + 1 + i, 1)
-        .setBackground(STATION_ROW_COLORS[i % STATION_ROW_COLORS.length]);
+    const stationColors = assignment.stationOrder.map(function (_, i) {
+      return [STATION_ROW_COLORS[i % STATION_ROW_COLORS.length]];
     });
+    sheet.getRange(headerRow + 1, 1, gridRows, 1).setBackgrounds(stationColors);
   }
 
   sheet.setFrozenRows(headerRow);

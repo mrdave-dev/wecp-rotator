@@ -13,7 +13,6 @@ interface DayBlockCell {
 interface DayBlock {
   dayIndex: number; // 0 = Sunday .. 6 = Saturday
   dayName: string;
-  headerRow: number;
   included: boolean;
   rosterCells: DayBlockCell[];
 }
@@ -37,7 +36,6 @@ interface ScheduledDay {
   dayIndex: number;
   dayName: string;
   date: Date;
-  roster: string[];
 }
 
 interface ScheduleAssignment {

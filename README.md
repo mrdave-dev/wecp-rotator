@@ -37,7 +37,10 @@ Open the spreadsheet and use the **WECP** menu:
   moves to the end and everyone else moves up a spot.
 
 Fill Grid and Rotate & Fill both check whether the Schedule grid was
-hand-edited since it was last generated, and confirm before overwriting.
+hand-edited since it was last generated, and confirm before overwriting. They
+also confirm separately if a larger grid than last time (a new station or
+day) would grow into rows or columns that already have other content on
+them, since that's outside the area the hand-edit check watches.
 
 ## Development
 

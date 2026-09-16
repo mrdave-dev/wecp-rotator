@@ -2,6 +2,13 @@ const MENU_NAME = "WECP";
 const CONFIG_SHEET_NAME = "Config";
 const SCHEDULE_SHEET_NAME = "Schedule";
 const SCHEDULE_SNAPSHOT_PROPERTY = "SCHEDULE_SNAPSHOT_V2";
+// Written by the previous version of this script, which always cleared the
+// *entire* Schedule sheet before writing (a bare hash string, not the
+// {rows,cols,hash} JSON the current version stores). Its presence means
+// nothing but script-owned content could have survived on that sheet, so it
+// is used once to safely fall back to a full clear when upgrading, then
+// deleted.
+const LEGACY_SCHEDULE_SNAPSHOT_PROPERTY = "SCHEDULE_SNAPSHOT_V1";
 const SCHEDULE_TITLE = "WECP Pre-K Rotation Schedule";
 const START_DATE_LABEL = "Start date (first day of the upcoming week):";
 const STATIONS_SECTION_LABEL = "Stations (one per row, top-to-bottom schedule order):";

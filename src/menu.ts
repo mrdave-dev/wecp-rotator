@@ -40,30 +40,45 @@ function menuSetupWorkbook(): void {
   }
 }
 
-// Reads the Config sheet, validates it, and (re)writes the Schedule grid.
-// Shared by "Fill Grid" and "Rotate & Fill" so both show the same
-// dirty-overwrite confirmation and validation/result alerts. Returns
-// whether the grid was actually written.
-function fillScheduleFromConfig(
+// True if it's OK to proceed: either the Schedule grid wasn't hand-edited
+// since it was last generated, or the user confirmed overwriting it anyway.
+function confirmDirtyOverwrite(
   ui: GoogleAppsScript.Base.Ui,
-  configSheet: GoogleAppsScript.Spreadsheet.Sheet
+  scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet
 ): boolean {
-  const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
-
-  if (isScheduleDirty(scheduleSheet)) {
-    const response = ui.alert(
-      "Schedule has manual edits",
-      "The Schedule grid looks like it was hand-edited since it was last generated. Filling it now will overwrite those changes. Continue?",
-      ui.ButtonSet.YES_NO
-    );
-    if (response !== ui.Button.YES) {
-      return false;
-    }
+  if (!isScheduleDirty(scheduleSheet)) {
+    return true;
   }
+  const response = ui.alert(
+    "Schedule has manual edits",
+    "The Schedule grid looks like it was hand-edited since it was last generated. Filling it now will overwrite those changes. Continue?",
+    ui.ButtonSet.YES_NO
+  );
+  return response === ui.Button.YES;
+}
 
-  const config = readConfig(configSheet);
-  const assignment = computeAssignments(config);
+// True if it's OK to proceed: either filling the grid wouldn't grow into
+// rows/columns that already hold unrelated content, or the user confirmed
+// overwriting it anyway.
+function confirmGrowthOverwrite(
+  ui: GoogleAppsScript.Base.Ui,
+  scheduleSheet: GoogleAppsScript.Spreadsheet.Sheet,
+  assignment: ScheduleAssignment
+): boolean {
+  if (!wouldOverwriteContentOutsideGrid(scheduleSheet, assignment)) {
+    return true;
+  }
+  const response = ui.alert(
+    "Content near the grid",
+    "This week's grid is larger than last time and would overwrite some rows or columns on the Schedule sheet that already have other content on them (e.g. text below or beside the grid). Continue?",
+    ui.ButtonSet.YES_NO
+  );
+  return response === ui.Button.YES;
+}
 
+// True if the assignment can be filled: reports and returns false on either
+// a validation error or nothing to fill.
+function checkAssignment(ui: GoogleAppsScript.Base.Ui, assignment: ScheduleAssignment): boolean {
   if (assignment.errors.length > 0) {
     ui.alert("Can't fill the grid", assignment.errors.join("\n"), ui.ButtonSet.OK);
     return false;
@@ -76,15 +91,6 @@ function fillScheduleFromConfig(
     );
     return false;
   }
-
-  writeSchedule(scheduleSheet, config, assignment);
-  getSpreadsheet().setActiveSheet(scheduleSheet);
-
-  ui.alert(
-    "Schedule updated",
-    "The grid has been filled for the week of " + formatSheetDate(config.startDate) + ".",
-    ui.ButtonSet.OK
-  );
   return true;
 }
 
@@ -95,7 +101,27 @@ function menuFillGrid(): void {
     if (!configSheet) {
       return;
     }
-    fillScheduleFromConfig(ui, configSheet);
+    const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
+    if (!confirmDirtyOverwrite(ui, scheduleSheet)) {
+      return;
+    }
+
+    const config = readConfig(configSheet);
+    const assignment = computeAssignments(config);
+    if (!checkAssignment(ui, assignment)) {
+      return;
+    }
+    if (!confirmGrowthOverwrite(ui, scheduleSheet, assignment)) {
+      return;
+    }
+
+    writeSchedule(scheduleSheet, assignment);
+    getSpreadsheet().setActiveSheet(scheduleSheet);
+    ui.alert(
+      "Schedule updated",
+      "The grid has been filled for the week of " + formatSheetDate(config.startDate) + ".",
+      ui.ButtonSet.OK
+    );
   } catch (e) {
     showError(ui, e);
   }
@@ -108,11 +134,69 @@ function menuRotateAndFill(): void {
     if (!configSheet) {
       return;
     }
+    const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
+    if (!confirmDirtyOverwrite(ui, scheduleSheet)) {
+      return;
+    }
+
+    // Validate (and get the growth-overwrite confirmation) against the
+    // current config *before* rotating anything, so a "No" or a config
+    // problem leaves the rosters untouched. Rotation only reorders each
+    // day's roster — it never changes counts — so this check's outcome
+    // still holds after rotating.
+    const preAssignment = computeAssignments(readConfig(configSheet));
+    if (!checkAssignment(ui, preAssignment)) {
+      return;
+    }
+    if (!confirmGrowthOverwrite(ui, scheduleSheet, preAssignment)) {
+      return;
+    }
+
     rotateRosters(configSheet);
-    fillScheduleFromConfig(ui, configSheet);
+
+    const config = readConfig(configSheet);
+    const assignment = computeAssignments(config);
+    writeSchedule(scheduleSheet, assignment);
+    getSpreadsheet().setActiveSheet(scheduleSheet);
+    ui.alert(
+      "Schedule updated",
+      "Rosters were rotated and the grid has been filled for the week of " +
+        formatSheetDate(config.startDate) +
+        ".",
+      ui.ButtonSet.OK
+    );
   } catch (e) {
     showError(ui, e);
   }
+}
+
+// Shared by "Rotate Rosters" and "Unrotate Rosters": applies `action`, then
+// reports which days changed (or that there was nothing to do).
+function menuRotateOrUnrotate(
+  ui: GoogleAppsScript.Base.Ui,
+  configSheet: GoogleAppsScript.Spreadsheet.Sheet,
+  action: (sheet: GoogleAppsScript.Spreadsheet.Sheet) => string[],
+  baseVerb: string,
+  pastVerb: string
+): void {
+  const affectedDays = action(configSheet);
+  if (affectedDays.length === 0) {
+    ui.alert(
+      "Nothing to " + baseVerb,
+      "No included day has a roster with more than one person to " + baseVerb + ".",
+      ui.ButtonSet.OK
+    );
+    return;
+  }
+  ui.alert(
+    "Rosters " + pastVerb,
+    "Days " +
+      pastVerb +
+      ": " +
+      affectedDays.join(", ") +
+      '.\nUse "Fill Grid for Upcoming Week" to apply the new order to the schedule.',
+    ui.ButtonSet.OK
+  );
 }
 
 function menuRotateRosters(): void {
@@ -122,22 +206,7 @@ function menuRotateRosters(): void {
     if (!configSheet) {
       return;
     }
-    const rotatedDays = rotateRosters(configSheet);
-    if (rotatedDays.length === 0) {
-      ui.alert(
-        "Nothing rotated",
-        "No included day has a roster with more than one person to rotate.",
-        ui.ButtonSet.OK
-      );
-    } else {
-      ui.alert(
-        "Rosters rotated",
-        "Rotated: " +
-          rotatedDays.join(", ") +
-          '.\nUse "Fill Grid for Upcoming Week" to apply the new order to the schedule.',
-        ui.ButtonSet.OK
-      );
-    }
+    menuRotateOrUnrotate(ui, configSheet, rotateRosters, "rotate", "rotated");
   } catch (e) {
     showError(ui, e);
   }
@@ -150,22 +219,7 @@ function menuUnrotateRosters(): void {
     if (!configSheet) {
       return;
     }
-    const rotatedDays = unrotateRosters(configSheet);
-    if (rotatedDays.length === 0) {
-      ui.alert(
-        "Nothing to unrotate",
-        "No included day has a roster with more than one person to unrotate.",
-        ui.ButtonSet.OK
-      );
-    } else {
-      ui.alert(
-        "Rosters unrotated",
-        "Unrotated: " +
-          rotatedDays.join(", ") +
-          '.\nUse "Fill Grid for Upcoming Week" to apply the new order to the schedule.',
-        ui.ButtonSet.OK
-      );
-    }
+    menuRotateOrUnrotate(ui, configSheet, unrotateRosters, "unrotate", "unrotated");
   } catch (e) {
     showError(ui, e);
   }
