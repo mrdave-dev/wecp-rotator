@@ -47,3 +47,24 @@ function rotateRosters(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[] {
 
   return rotated;
 }
+
+// The inverse of rotateRosters: the first person moves to the end, and
+// everyone else shifts up one spot.
+function unrotateRosters(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[] {
+  const blocks = findDayBlocks(sheet);
+  const rotated: string[] = [];
+
+  blocks.forEach(function (block) {
+    if (!block.included || block.rosterCells.length < 2) {
+      return;
+    }
+    const rawValues = block.rosterCells.map(function (c) {
+      return c.raw;
+    });
+    const rotatedValues = rawValues.slice(1).concat([rawValues[0]]);
+    writeCellsBatched(sheet, block.rosterCells, rotatedValues, 2);
+    rotated.push(block.dayName);
+  });
+
+  return rotated;
+}

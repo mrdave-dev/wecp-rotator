@@ -9,28 +9,35 @@ Script: https://script.google.com/d/1CL1SL6NdrfEQqkJlJ9SfI53gsXX7t43GoVFu3kia6_8
 
 ## How it works
 
-Open the spreadsheet and use the **Rotation** menu:
+Open the spreadsheet and use the **WECP** menu:
 
-- **Set Up Workbook** creates a `Config` sheet and a `Schedule` sheet. The
-  Config sheet has one block per day of the week: a checkbox to include that
-  day, a start date, and two columns to list that day's roster (people) and
-  stations. Monday comes pre-filled with an example.
-- Fill in the Config sheet: check the days you use, set the start date (the
-  first day of the upcoming week), and list each included day's roster and
-  stations.
+- **Set Up Workbook** creates a `Config` sheet and a `Schedule` sheet.
+  The Config sheet has a start date, a single **Stations** list (defined
+  once — the same stations apply to every day), and one block per day of
+  the week with a checkbox to include that day and a roster of who works
+  it. Monday comes pre-filled with an example roster.
+- Fill in the Config sheet: list your stations (in the order they should
+  appear on the schedule), check the days you use, set the start date (the
+  first day of the upcoming week), and list each included day's roster.
 - **Fill Grid for Upcoming Week** reads the Config sheet and writes the
   `Schedule` grid: one column per included day (in calendar order from the
-  start date), one row per station, and each cell is the person assigned to
-  that station that day. If a day has more people than stations (or vice
-  versa), the roster cycles across the stations in order.
+  start date), one row per station (in the order they're listed in Config),
+  and each cell is the person assigned to that station that day. If a day's
+  roster is longer or shorter than the station list, it cycles across the
+  stations in order. Only the grid itself (title, day headers, and station
+  rows) is touched — any other content on the Schedule sheet, like
+  announcements below the grid, is left alone.
+- **Rotate & Fill for Upcoming Week** does Rotate Rosters and Fill Grid in
+  one click.
 - **Rotate Rosters** shifts each included day's roster by one: the last
   person moves to the front and everyone else moves down a spot. This only
   changes the saved Config order — run Fill Grid afterwards to apply it to
   the schedule.
-- **Check for Manual Edits** reports whether the Schedule sheet has been
-  hand-edited since it was last generated. Fill Grid and Set Up Workbook
-  both check this automatically and confirm before overwriting a
-  hand-edited schedule.
+- **Unrotate Rosters** undoes one Rotate Rosters step: the first person
+  moves to the end and everyone else moves up a spot.
+
+Fill Grid and Rotate & Fill both check whether the Schedule grid was
+hand-edited since it was last generated, and confirm before overwriting.
 
 ## Development
 

@@ -1,12 +1,13 @@
 function onOpen(): void {
   SpreadsheetApp.getUi()
-    .createMenu("Rotation")
+    .createMenu(MENU_NAME)
     .addItem("Set Up Workbook", "menuSetupWorkbook")
     .addSeparator()
     .addItem("Fill Grid for Upcoming Week", "menuFillGrid")
-    .addItem("Rotate Rosters", "menuRotateRosters")
+    .addItem("Rotate & Fill for Upcoming Week", "menuRotateAndFill")
     .addSeparator()
-    .addItem("Check for Manual Edits", "menuCheckForManualEdits")
+    .addItem("Rotate Rosters", "menuRotateRosters")
+    .addItem("Unrotate Rosters", "menuUnrotateRosters")
     .addToUi();
 }
 
@@ -17,7 +18,7 @@ function requireConfigSheet(
   if (!sheet) {
     ui.alert(
       "No Config sheet yet",
-      'Use "Rotation > Set Up Workbook" first.',
+      'Use "' + MENU_NAME + ' > Set Up Workbook" first.',
       ui.ButtonSet.OK
     );
     return null;
@@ -39,6 +40,54 @@ function menuSetupWorkbook(): void {
   }
 }
 
+// Reads the Config sheet, validates it, and (re)writes the Schedule grid.
+// Shared by "Fill Grid" and "Rotate & Fill" so both show the same
+// dirty-overwrite confirmation and validation/result alerts. Returns
+// whether the grid was actually written.
+function fillScheduleFromConfig(
+  ui: GoogleAppsScript.Base.Ui,
+  configSheet: GoogleAppsScript.Spreadsheet.Sheet
+): boolean {
+  const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
+
+  if (isScheduleDirty(scheduleSheet)) {
+    const response = ui.alert(
+      "Schedule has manual edits",
+      "The Schedule grid looks like it was hand-edited since it was last generated. Filling it now will overwrite those changes. Continue?",
+      ui.ButtonSet.YES_NO
+    );
+    if (response !== ui.Button.YES) {
+      return false;
+    }
+  }
+
+  const config = readConfig(configSheet);
+  const assignment = computeAssignments(config);
+
+  if (assignment.errors.length > 0) {
+    ui.alert("Can't fill the grid", assignment.errors.join("\n"), ui.ButtonSet.OK);
+    return false;
+  }
+  if (assignment.orderedDays.length === 0) {
+    ui.alert(
+      "Nothing to fill",
+      "No days are marked as included on the Config sheet. Check at least one day's box and try again.",
+      ui.ButtonSet.OK
+    );
+    return false;
+  }
+
+  writeSchedule(scheduleSheet, config, assignment);
+  getSpreadsheet().setActiveSheet(scheduleSheet);
+
+  ui.alert(
+    "Schedule updated",
+    "The grid has been filled for the week of " + formatSheetDate(config.startDate) + ".",
+    ui.ButtonSet.OK
+  );
+  return true;
+}
+
 function menuFillGrid(): void {
   const ui = SpreadsheetApp.getUi();
   try {
@@ -46,43 +95,21 @@ function menuFillGrid(): void {
     if (!configSheet) {
       return;
     }
-    const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
+    fillScheduleFromConfig(ui, configSheet);
+  } catch (e) {
+    showError(ui, e);
+  }
+}
 
-    if (isScheduleDirty(scheduleSheet)) {
-      const response = ui.alert(
-        "Schedule has manual edits",
-        "The Schedule sheet looks like it was hand-edited since it was last generated. Filling the grid now will overwrite those changes. Continue?",
-        ui.ButtonSet.YES_NO
-      );
-      if (response !== ui.Button.YES) {
-        return;
-      }
-    }
-
-    const config = readConfig(configSheet);
-    const assignment = computeAssignments(config);
-
-    if (assignment.errors.length > 0) {
-      ui.alert("Can't fill the grid", assignment.errors.join("\n"), ui.ButtonSet.OK);
+function menuRotateAndFill(): void {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const configSheet = requireConfigSheet(ui);
+    if (!configSheet) {
       return;
     }
-    if (assignment.orderedDays.length === 0) {
-      ui.alert(
-        "Nothing to fill",
-        "No days are marked as included on the Config sheet. Check at least one day's box and try again.",
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-
-    writeSchedule(scheduleSheet, config, assignment);
-    getSpreadsheet().setActiveSheet(scheduleSheet);
-
-    ui.alert(
-      "Schedule updated",
-      "The grid has been filled for the week of " + formatSheetDate(config.startDate) + ".",
-      ui.ButtonSet.OK
-    );
+    rotateRosters(configSheet);
+    fillScheduleFromConfig(ui, configSheet);
   } catch (e) {
     showError(ui, e);
   }
@@ -116,28 +143,26 @@ function menuRotateRosters(): void {
   }
 }
 
-function menuCheckForManualEdits(): void {
+function menuUnrotateRosters(): void {
   const ui = SpreadsheetApp.getUi();
   try {
-    const scheduleSheet = getSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
-    if (!scheduleSheet) {
-      ui.alert(
-        "No schedule yet",
-        'Use "Rotation > Fill Grid for Upcoming Week" first.',
-        ui.ButtonSet.OK
-      );
+    const configSheet = requireConfigSheet(ui);
+    if (!configSheet) {
       return;
     }
-    if (isScheduleDirty(scheduleSheet)) {
+    const rotatedDays = unrotateRosters(configSheet);
+    if (rotatedDays.length === 0) {
       ui.alert(
-        "Manual edits detected",
-        "The Schedule sheet has been changed by hand since it was last generated by this script.",
+        "Nothing to unrotate",
+        "No included day has a roster with more than one person to unrotate.",
         ui.ButtonSet.OK
       );
     } else {
       ui.alert(
-        "No manual edits",
-        "The Schedule sheet matches what this script last generated.",
+        "Rosters unrotated",
+        "Unrotated: " +
+          rotatedDays.join(", ") +
+          '.\nUse "Fill Grid for Upcoming Week" to apply the new order to the schedule.',
         ui.ButtonSet.OK
       );
     }
