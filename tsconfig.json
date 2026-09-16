@@ -1,8 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es5",
+    "target": "es2019",
     "module": "commonjs",
-    "lib": ["es2015"],
+    "lib": ["es2019"],
+    "types": ["google-apps-script"],
     "outDir": "dist",
     "rootDir": "src",
     "strict": true

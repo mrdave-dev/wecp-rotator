@@ -9,9 +9,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@google/clasp": "^3.0.4-alpha",
-    "@types/google-apps-script": "^1.0.97",
+    "@google/clasp": "^3.4.1",
+    "@types/google-apps-script": "^2.0.13",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^7.0.2"
   }
 }
