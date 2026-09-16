@@ -1,6 +1,10 @@
 interface DayBlockCell {
   row: number;
   value: string;
+  // The raw cell value (before String()-normalization) so callers that
+  // write a cell back (rotation) can preserve its original type instead of
+  // forcing it to text.
+  raw: unknown;
 }
 
 // A day-of-week's block as located on the Config sheet, with references

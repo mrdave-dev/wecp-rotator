@@ -1,9 +1,7 @@
-function nextMondayOnOrAfter(date: Date): Date {
-  const result = new Date(date.getTime());
-  while (result.getDay() !== 1) {
-    result.setDate(result.getDate() + 1);
-  }
-  return result;
+function nextMondayOnOrAfter(date: Date, tz: string): Date {
+  const weekday = getWeekdayIndex(date, tz); // 0 = Sunday .. 6 = Saturday
+  const offset = (1 - weekday + 7) % 7;
+  return addCalendarDays(date, tz, offset);
 }
 
 function writeDayBlock(
@@ -42,20 +40,22 @@ function writeDayBlock(
 function buildConfigTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
   sheet.getRange(1, 1).setValue("WECP Rotation — Configuration").setFontWeight("bold").setFontSize(12);
 
+  const tz = getSpreadsheetTz();
   sheet.getRange(3, 1).setValue(START_DATE_LABEL).setFontWeight("bold");
   const dateCell = sheet.getRange(3, 2);
-  dateCell.setValue(nextMondayOnOrAfter(new Date()));
+  dateCell.setValue(nextMondayOnOrAfter(new Date(), tz));
   dateCell.setNumberFormat("M/d/yyyy");
 
   sheet
     .getRange(5, 1)
     .setValue(
       "Check the days you use below, then list who works each day and which stations it needs. " +
-        INCLUDE_HEADER_LABEL +
-        " Example: Monday below has Anna, Brenda and Charlie covering Art, Small Room and Sensory."
+        "Example: Monday below has Anna, Brenda and Charlie covering Art, Small Room and Sensory."
     )
     .setFontStyle("italic")
     .setWrap(true);
+
+  sheet.getRange(6, 1).setValue(INCLUDE_HEADER_LABEL).setFontStyle("italic");
 
   let row = 7;
   for (let dayIndex = 0; dayIndex < DAY_NAMES.length; dayIndex++) {
