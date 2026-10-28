@@ -13,12 +13,16 @@ Open the spreadsheet and use the **WECP** menu:
 
 - **Set Up Workbook** creates a `Config` sheet and a `Schedule` sheet.
   The Config sheet has a start date, a single **Stations** list (defined
-  once — the same stations apply to every day), and one block per day of
-  the week with a checkbox to include that day and a roster of who works
-  it. Monday comes pre-filled with an example roster.
+  once — the same stations apply to every day), and a single **Roster**
+  table: one row per person per workday, as a name and a one-letter day
+  code (`M`, `T`, `W`, `R`, or `F` for Mon-Fri; `R` is Thursday, to avoid
+  clashing with Tuesday's `T`). Someone who works multiple days just gets
+  one row per day. A day is only scheduled if at least one roster row names
+  it — there's no separate day toggle. Comes pre-filled with an example
+  (Anna/Brenda/Charlie on Monday, David/Evan/Francine on Wednesday).
 - Fill in the Config sheet: list your stations (in the order they should
-  appear on the schedule), check the days you use, set the start date (the
-  first day of the upcoming week), and list each included day's roster.
+  appear on the schedule), set the start date (the first day of the
+  upcoming week), and list who works which day in the Roster table.
 - **Fill Grid for Upcoming Week** reads the Config sheet and writes the
   `Schedule` grid: one column per included day (in calendar order from the
   start date), one row per station (in the order they're listed in Config),

@@ -4,33 +4,6 @@ function nextMondayOnOrAfter(date: Date, tz: string): Date {
   return addCalendarDays(date, tz, offset);
 }
 
-function writeDayBlock(
-  sheet: GoogleAppsScript.Spreadsheet.Sheet,
-  startRow: number,
-  dayIndex: number,
-  included: boolean,
-  rosterSample: string[] | null
-): number {
-  const headerRow = startRow;
-  const headerCell = sheet.getRange(headerRow, 1);
-  headerCell.insertCheckboxes();
-  headerCell.setValue(included);
-  sheet.getRange(headerRow, 2).setValue(DAY_NAMES[dayIndex]).setFontWeight("bold");
-
-  const subHeaderRow = headerRow + 1;
-  sheet.getRange(subHeaderRow, 2).setValue(ROSTER_HEADER_LABEL).setFontStyle("italic");
-
-  const listStart = subHeaderRow + 1;
-  for (let i = 0; i < DEFAULT_DAY_BLOCK_ROWS; i++) {
-    if (rosterSample && i < rosterSample.length) {
-      sheet.getRange(listStart + i, 2).setValue(rosterSample[i]);
-    }
-  }
-
-  const blockEnd = listStart + DEFAULT_DAY_BLOCK_ROWS - 1;
-  return blockEnd + 2; // one blank spacer row before the next block
-}
-
 function buildConfigTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
   sheet.getRange(1, 1).setValue("WECP Rotation — Configuration").setFontWeight("bold").setFontSize(12);
 
@@ -51,29 +24,29 @@ function buildConfigTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
   }
   row += DEFAULT_STATION_ROWS + 1;
 
-  sheet
-    .getRange(row, 1)
-    .setValue(
-      "Check the days you use below, then list who works each day. " +
-        "Example: Monday below has Anna, Brenda and Charlie."
-    )
-    .setFontStyle("italic")
-    .setWrap(true);
+  sheet.getRange(row, 1).setValue(ROSTER_SECTION_LABEL).setFontWeight("bold").setFontStyle("italic");
+  row += 1;
+  sheet.getRange(row, 1).setValue(ROSTER_NAME_HEADER).setFontStyle("italic");
+  sheet.getRange(row, 2).setValue(ROSTER_DAY_HEADER).setFontStyle("italic");
   row += 1;
 
-  sheet.getRange(row, 1).setValue(INCLUDE_HEADER_LABEL).setFontStyle("italic");
-  row += 1;
-
-  for (let dayIndex = 0; dayIndex < DAY_NAMES.length; dayIndex++) {
-    if (dayIndex === 1) {
-      row = writeDayBlock(sheet, row, dayIndex, true, ["Anna", "Brenda", "Charlie"]);
-    } else {
-      row = writeDayBlock(sheet, row, dayIndex, false, null);
+  const sampleRoster: [string, string][] = [
+    ["Anna", "M"],
+    ["Brenda", "M"],
+    ["Charlie", "M"],
+    ["David", "W"],
+    ["Evan", "W"],
+    ["Francine", "W"],
+  ];
+  for (let i = 0; i < DEFAULT_ROSTER_ROWS; i++) {
+    if (i < sampleRoster.length) {
+      sheet.getRange(row + i, 1).setValue(sampleRoster[i][0]);
+      sheet.getRange(row + i, 2).setValue(sampleRoster[i][1]);
     }
   }
 
-  sheet.setColumnWidth(1, 260);
-  sheet.setColumnWidth(2, 160);
+  sheet.setColumnWidth(1, 220);
+  sheet.setColumnWidth(2, 140);
 }
 
 function setupWorkbook(): void {
@@ -85,7 +58,7 @@ function setupWorkbook(): void {
   if (alreadySetUp) {
     const response = ui.alert(
       "Set Up Workbook",
-      "This workbook already has a Config sheet. Running Setup again will reset its layout. Any stations, days, or rosters you've already entered will be lost. Continue?",
+      "This workbook already has a Config sheet. Running Setup again will reset its layout. Any stations or roster rows you've already entered will be lost. Continue?",
       ui.ButtonSet.YES_NO
     );
     if (response !== ui.Button.YES) {
@@ -110,7 +83,7 @@ function setupWorkbook(): void {
   ss.setActiveSheet(configSheet);
   ui.alert(
     "Workbook set up",
-    "The Config sheet is ready. List your stations, check the days you use, fill in each day's roster, set a start date, then use the " +
+    "The Config sheet is ready. List your stations, set a start date, then list who works each day (one row per person per workday) using the " +
       MENU_NAME +
       " menu to fill the grid.",
     ui.ButtonSet.OK

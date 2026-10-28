@@ -7,16 +7,6 @@ interface DayBlockCell {
   raw: unknown;
 }
 
-// A day-of-week's block as located on the Config sheet, with references
-// back to the exact rows each roster entry came from so callers (rotation)
-// can write values back in place.
-interface DayBlock {
-  dayIndex: number; // 0 = Sunday .. 6 = Saturday
-  dayName: string;
-  included: boolean;
-  rosterCells: DayBlockCell[];
-}
-
 interface DayConfig {
   dayIndex: number;
   dayName: string;

@@ -28,12 +28,6 @@ function normalizeCell(value: unknown): string {
   return String(value).trim();
 }
 
-function cellValues(cells: DayBlockCell[]): string[] {
-  return cells.map(function (c) {
-    return c.value;
-  });
-}
-
 // --- Timezone-safe date helpers -------------------------------------------
 //
 // Date#getDay()/getDate()/setDate() operate in whatever timezone the Apps

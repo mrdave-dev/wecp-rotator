@@ -86,7 +86,7 @@ function checkAssignment(ui: GoogleAppsScript.Base.Ui, assignment: ScheduleAssig
   if (assignment.orderedDays.length === 0) {
     ui.alert(
       "Nothing to fill",
-      "No days are marked as included on the Config sheet. Check at least one day's box and try again.",
+      "No roster rows are filled in on the Config sheet. Add at least one person and day, and try again.",
       ui.ButtonSet.OK
     );
     return false;

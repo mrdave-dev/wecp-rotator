@@ -1,17 +1,8 @@
-function findDayNameIndex(text: string): number {
-  const normalized = text.trim().toLowerCase();
-  for (let i = 0; i < DAY_NAMES.length; i++) {
-    if (DAY_NAMES[i].toLowerCase() === normalized) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-// The Config sheet only ever needs columns A (labels / include checkboxes)
-// and B (list entries: the start date, the stations list, and each day's
-// roster all live in these two columns), so every reader shares one range
-// read instead of re-scanning the sheet per section.
+// The Config sheet only ever needs columns A (names / section labels) and B
+// (days / list values / the start date): the start date and stations list
+// live in A (label) + B (value), and the roster table lives in A (name) + B
+// (day letter), so every reader shares one range read instead of
+// re-scanning the sheet per section.
 function readConfigValues(sheet: GoogleAppsScript.Spreadsheet.Sheet): unknown[][] {
   const lastRow = sheet.getLastRow();
   return lastRow > 0 ? sheet.getRange(1, 1, lastRow, 2).getValues() : [];
@@ -36,89 +27,20 @@ function readStartDateFromValues(values: unknown[][]): Date {
   );
 }
 
-// A day header row is a checkbox (the "include this day" toggle) in column
-// A paired with a day-of-week name in column B. Requiring an actual
-// checkbox (rather than matching the day name anywhere in column B) keeps a
-// roster entry that happens to be named after a weekday from being mistaken
-// for a header. Throws if the same day appears more than once. Computed
-// once per read and shared by both the Stations section and the day blocks,
-// since both need to know where the day headers are.
-function findDayHeaderRows(values: unknown[][]): { row: number; dayIndex: number }[] {
-  const headers: { row: number; dayIndex: number }[] = [];
+function findRosterSectionLabelRow(values: unknown[][]): number {
   for (let r = 0; r < values.length; r++) {
-    if (typeof values[r][0] !== "boolean") {
-      continue;
-    }
-    const dayIndex = findDayNameIndex(normalizeCell(values[r][1]));
-    if (dayIndex !== -1) {
-      headers.push({ row: r + 1, dayIndex });
+    if (normalizeCell(values[r][0]) === ROSTER_SECTION_LABEL) {
+      return r + 1;
     }
   }
-
-  const seenDayIndexes: { [dayIndex: number]: number } = {};
-  headers.forEach(function (h) {
-    if (seenDayIndexes[h.dayIndex] !== undefined) {
-      throw new Error(
-        "Found more than one row for " +
-          DAY_NAMES[h.dayIndex] +
-          " on the Config sheet (rows " +
-          seenDayIndexes[h.dayIndex] +
-          " and " +
-          h.row +
-          "). Please remove the duplicate before continuing."
-      );
-    }
-    seenDayIndexes[h.dayIndex] = h.row;
-  });
-
-  return headers;
-}
-
-// Reads the roster list cells between each day header and the next one (or
-// the end of the sheet). Blank rows inside a block, and the "Roster"
-// sub-header itself, are simply skipped, so users can leave gaps or insert
-// extra rows without breaking anything.
-function findDayBlocksFromValues(
-  values: unknown[][],
-  headers: { row: number; dayIndex: number }[]
-): DayBlock[] {
-  const lastRow = values.length;
-
-  return headers.map(function (header, h) {
-    const blockEnd = h + 1 < headers.length ? headers[h + 1].row - 1 : lastRow;
-    const listStart = header.row + 1;
-
-    const rosterCells: DayBlockCell[] = [];
-    for (let row = listStart; row <= blockEnd; row++) {
-      const raw = values[row - 1][1];
-      const value = normalizeCell(raw);
-      if (value !== "" && value !== ROSTER_HEADER_LABEL) {
-        rosterCells.push({ row, value, raw });
-      }
-    }
-
-    return {
-      dayIndex: header.dayIndex,
-      dayName: DAY_NAMES[header.dayIndex],
-      included: values[header.row - 1][0] === true,
-      rosterCells,
-    };
-  });
-}
-
-function findDayBlocks(sheet: GoogleAppsScript.Spreadsheet.Sheet): DayBlock[] {
-  const values = readConfigValues(sheet);
-  return findDayBlocksFromValues(values, findDayHeaderRows(values));
+  return -1;
 }
 
 // Stations are a single list defined once, read from the Stations label's
 // own row (so a station typed directly next to the label, matching how the
-// start date works, isn't dropped) through the row before the first day
-// header — so, like the day blocks, users can insert extra rows freely.
-function readStationsFromValues(
-  values: unknown[][],
-  headers: { row: number; dayIndex: number }[]
-): string[] {
+// start date works, isn't dropped) through the row before the Roster
+// section — so, like the roster table, users can insert extra rows freely.
+function readStationsFromValues(values: unknown[][], rosterLabelRow: number): string[] {
   let labelRow = -1;
   for (let r = 0; r < values.length; r++) {
     if (normalizeCell(values[r][0]) === STATIONS_SECTION_LABEL) {
@@ -131,17 +53,17 @@ function readStationsFromValues(
       "Couldn't find the '" + STATIONS_SECTION_LABEL + "' row on the Config sheet."
     );
   }
-  if (headers.length > 0 && labelRow > headers[0].row) {
+  if (rosterLabelRow !== -1 && labelRow > rosterLabelRow) {
     throw new Error(
       "The '" +
         STATIONS_SECTION_LABEL +
-        "' section must come before the day blocks (it's currently below " +
-        DAY_NAMES[headers[0].dayIndex] +
-        "). Please move it above all of the days."
+        "' section must come before the '" +
+        ROSTER_SECTION_LABEL +
+        "' section. Please move it above the roster."
     );
   }
 
-  const blockEnd = headers.length > 0 ? headers[0].row - 1 : values.length;
+  const blockEnd = rosterLabelRow !== -1 ? rosterLabelRow - 1 : values.length;
 
   const stations: string[] = [];
   const seen: { [name: string]: boolean } = {};
@@ -161,19 +83,80 @@ function readStationsFromValues(
   return stations;
 }
 
+interface RosterEntry {
+  row: number;
+  name: string;
+  rawName: unknown;
+  dayIndex: number;
+}
+
+// Reads the flat roster table from the Roster section's own row (so a name
+// typed directly next to the label isn't dropped) through the end of the
+// sheet, skipping blank rows and the "Name"/"Day" header row. Each
+// non-blank row must have both a name and a valid day letter.
+function readRosterEntriesFromValues(values: unknown[][], rosterLabelRow: number): RosterEntry[] {
+  const entries: RosterEntry[] = [];
+  for (let row = rosterLabelRow; row <= values.length; row++) {
+    const rawName = values[row - 1][0];
+    const rawDay = values[row - 1][1];
+    const name = normalizeCell(rawName);
+    const dayLetter = normalizeCell(rawDay);
+
+    if (name === ROSTER_SECTION_LABEL || name === ROSTER_NAME_HEADER || dayLetter === ROSTER_DAY_HEADER) {
+      continue;
+    }
+    if (name === "" && dayLetter === "") {
+      continue;
+    }
+    if (name === "" || dayLetter === "") {
+      throw new Error(
+        "Row " +
+          row +
+          " of the roster has only a " +
+          (name === "" ? "day" : "name") +
+          ". Fill in both the name and the day, or leave the row blank."
+      );
+    }
+
+    const dayIndex = DAY_LETTER_TO_INDEX[dayLetter.toUpperCase()];
+    if (dayIndex === undefined) {
+      throw new Error(
+        "Row " + row + "'s day ('" + dayLetter + "') isn't valid. Use one letter: M, T, W, R, or F."
+      );
+    }
+
+    entries.push({ row, name, rawName, dayIndex });
+  }
+  return entries;
+}
+
 function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
   const values = readConfigValues(sheet);
-  const headers = findDayHeaderRows(values);
   const startDate = readStartDateFromValues(values);
-  const stations = readStationsFromValues(values, headers);
-  const blocks = findDayBlocksFromValues(values, headers);
-  const days: DayConfig[] = blocks.map(function (block) {
+  const rosterLabelRow = findRosterSectionLabelRow(values);
+  if (rosterLabelRow === -1) {
+    throw new Error(
+      "Couldn't find the '" + ROSTER_SECTION_LABEL + "' row on the Config sheet."
+    );
+  }
+  const stations = readStationsFromValues(values, rosterLabelRow);
+  const entries = readRosterEntriesFromValues(values, rosterLabelRow);
+
+  const days: DayConfig[] = [1, 2, 3, 4, 5].map(function (dayIndex) {
+    const roster = entries
+      .filter(function (e) {
+        return e.dayIndex === dayIndex;
+      })
+      .map(function (e) {
+        return e.name;
+      });
     return {
-      dayIndex: block.dayIndex,
-      dayName: block.dayName,
-      included: block.included,
-      roster: cellValues(block.rosterCells),
+      dayIndex: dayIndex,
+      dayName: DAY_NAMES[dayIndex],
+      included: roster.length > 0,
+      roster: roster,
     };
   });
+
   return { startDate: startDate, stations: stations, days: days };
 }

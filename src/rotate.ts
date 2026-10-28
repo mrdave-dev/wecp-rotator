@@ -21,35 +21,60 @@ function writeCellsBatched(
   }
 }
 
-// Applies `transform` to each included day's roster (as raw cell values, so
-// a number, date, or other non-text entry keeps its original type instead
-// of being coerced to a string) and writes the result back in place. Shared
-// by rotateRosters and unrotateRosters, which differ only in `transform`.
+// Groups the roster table's rows by day index: each group is the ordered
+// list of Name-column cells (with row + raw value) for the rows assigned to
+// that day. Rows for different days can be interleaved in the table, so a
+// group's rows aren't necessarily contiguous.
+function groupRosterCellsByDay(sheet: GoogleAppsScript.Spreadsheet.Sheet): { [dayIndex: number]: DayBlockCell[] } {
+  const values = readConfigValues(sheet);
+  const rosterLabelRow = findRosterSectionLabelRow(values);
+  if (rosterLabelRow === -1) {
+    throw new Error(
+      "Couldn't find the '" + ROSTER_SECTION_LABEL + "' row on the Config sheet."
+    );
+  }
+  const entries = readRosterEntriesFromValues(values, rosterLabelRow);
+
+  const byDay: { [dayIndex: number]: DayBlockCell[] } = {};
+  entries.forEach(function (e) {
+    if (!byDay[e.dayIndex]) {
+      byDay[e.dayIndex] = [];
+    }
+    byDay[e.dayIndex].push({ row: e.row, value: e.name, raw: e.rawName });
+  });
+  return byDay;
+}
+
+// Applies `transform` to each day's roster (as raw cell values, so a
+// number, date, or other non-text entry keeps its original type instead of
+// being coerced to a string) and writes the result back to the Name column
+// at the same rows — the Day column is untouched. Shared by rotateRosters
+// and unrotateRosters, which differ only in `transform`.
 function applyRosterTransform(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   transform: (raw: unknown[]) => unknown[]
 ): string[] {
-  const blocks = findDayBlocks(sheet);
+  const byDay = groupRosterCellsByDay(sheet);
   const affected: string[] = [];
 
-  blocks.forEach(function (block) {
-    if (!block.included || block.rosterCells.length < 2) {
+  Object.keys(byDay).forEach(function (key) {
+    const dayIndex = Number(key);
+    const cells = byDay[dayIndex];
+    if (cells.length < 2) {
       return;
     }
-    const rawValues = block.rosterCells.map(function (c) {
+    const rawValues = cells.map(function (c) {
       return c.raw;
     });
-    writeCellsBatched(sheet, block.rosterCells, transform(rawValues), 2);
-    affected.push(block.dayName);
+    writeCellsBatched(sheet, cells, transform(rawValues), 1);
+    affected.push(DAY_NAMES[dayIndex]);
   });
 
   return affected;
 }
 
-// Rotates each included day's roster in place: the last person moves to the
-// front, and everyone else shifts down one spot. Blank gaps in the original
-// list are left untouched since only the non-blank rows found by
-// findDayBlocks are considered.
+// Rotates each day's roster in place: the last person moves to the front,
+// and everyone else shifts down one spot.
 function rotateRosters(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[] {
   return applyRosterTransform(sheet, function (raw) {
     return [raw[raw.length - 1]].concat(raw.slice(0, raw.length - 1));
