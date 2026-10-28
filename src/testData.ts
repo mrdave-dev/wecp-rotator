@@ -35,6 +35,8 @@ function populateTestNames(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
         ROSTER_NAME_HEADER +
         "' / '" +
         ROSTER_DAY_HEADER +
+        "' / '" +
+        ROSTER_EMAIL_HEADER +
         "' header row on the Config sheet."
     );
   }

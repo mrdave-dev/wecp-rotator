@@ -8,6 +8,8 @@ function onOpen(): void {
     .addItem("Next Week", "menuNextWeek")
     .addItem("Previous Week", "menuPreviousWeek")
     .addSeparator()
+    .addItem("Draft Schedule Email", "menuDraftScheduleEmail")
+    .addSeparator()
     .addItem("Add 16 Test Names", "menuPopulateTestNames")
     .addToUi();
 }
@@ -196,6 +198,59 @@ function menuPreviousWeek(): void {
       return;
     }
     moveWeek(ui, configSheet, -7, unrotateRosters, "previous week");
+  } catch (e) {
+    showError(ui, e);
+  }
+}
+
+// Shows a small modal with a clickable link, since ui.alert only renders
+// plain text (no clickable anchors).
+function showLinkDialog(ui: GoogleAppsScript.Base.Ui, title: string, message: string, url: string): void {
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial,sans-serif;font-size:14px;padding:4px 8px;">' +
+      "<p>" +
+      message +
+      "</p>" +
+      '<p><a href="' +
+      url +
+      '" target="_blank">Open it in Gmail</a></p>' +
+      "</div>"
+  )
+    .setWidth(340)
+    .setHeight(120);
+  ui.showModalDialog(html, title);
+}
+
+function menuDraftScheduleEmail(): void {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const configSheet = requireConfigSheet(ui);
+    if (!configSheet) {
+      return;
+    }
+    const scheduleSheet = getSpreadsheet().getSheetByName(SCHEDULE_SHEET_NAME);
+    if (!scheduleSheet || scheduleSheet.getLastRow() === 0) {
+      ui.alert(
+        "No schedule yet",
+        'Use "' + MENU_NAME + ' > Fill Grid for Upcoming Week" first.',
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+
+    const config = readConfig(configSheet);
+    const assignment = computeAssignments(config);
+    if (!checkAssignment(ui, assignment)) {
+      return;
+    }
+
+    const draft = createScheduleEmailDraft(scheduleSheet, config, assignment);
+    showLinkDialog(
+      ui,
+      "Schedule email drafted",
+      "A draft (not sent) with the schedule attached as a PDF is ready in Gmail.",
+      draftLinkUrl(draft)
+    );
   } catch (e) {
     showError(ui, e);
   }

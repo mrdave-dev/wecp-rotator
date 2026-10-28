@@ -14,21 +14,23 @@ Open the spreadsheet and use the **WECP** menu:
 - **Set Up Workbook** creates a `Config` sheet and a `Schedule` sheet.
   The Config sheet has a start date, a single **Stations** list (defined
   once — the same stations apply to every day), and a single **Roster**
-  table headed `Name | Day`: one row per person per workday, e.g.
+  table headed `Name | Day | Email`: one row per person per workday, e.g.
 
   ```
-  Name     Day
-  Adam     M
-  Brenda   T
+  Name     Day   Email
+  Adam     M     adam@example.com
+  Brenda   T     brenda@example.com;brenda2@example.com
   Charlie  R
-  Diana    T
+  Diana    T     diana@example.com
   ```
 
   Day is one letter — `M`, `T`, `W`, `R`, or `F` for Mon-Fri (`R` is
   Thursday, to avoid clashing with Tuesday's `T`). Someone who works
   multiple days just gets one row per day. A day is only scheduled if at
-  least one roster row names it — there's no separate day toggle. Comes
-  pre-filled with the example above.
+  least one roster row names it — there's no separate day toggle. Email is
+  optional and can hold more than one address for the same person,
+  separated by semicolons; it's only used by Draft Schedule Email (below),
+  not by Fill Grid. Comes pre-filled with the example above.
 - Fill in the Config sheet: list your stations (in the order they should
   appear on the schedule), set the start date (the first day of the
   upcoming week), and list who works which day in the Roster table.
@@ -50,6 +52,17 @@ Open the spreadsheet and use the **WECP** menu:
 - **Previous Week** is the mirror of Next Week: the start date moves back 7
   days, each day's roster un-rotates (the first person moves to the end,
   everyone else moves up a spot), and the grid is filled for that week.
+- **Draft Schedule Email** exports the current `Schedule` sheet as a PDF and
+  creates a Gmail draft (never sent automatically) with it attached, Bcc'd
+  to every email address on file for everyone actually assigned somewhere
+  in this week's grid (duplicates removed; people not scheduled this week
+  are skipped even if they're in the Roster table). A dialog with a
+  clickable link to open the draft in Gmail appears once it's created. If
+  nobody scheduled has an email on file, or an address looks malformed, it
+  tells you instead of creating an empty or broken draft. The first time
+  you use this you'll see an extra one-time Google authorization prompt,
+  since it needs permission to read the sheet as a PDF and create Gmail
+  drafts.
 - **Add 16 Test Names** is a development/testing helper: appends 16 sample
   names to the Roster table, cycling through M-F, so Fill Grid/Next Week
   can be exercised against a nontrivial roster without typing names in by

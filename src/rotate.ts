@@ -3,7 +3,7 @@
 // call per cell.
 function writeCellsBatched(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
-  cells: DayBlockCell[],
+  cells: { row: number }[],
   values: unknown[],
   column: number
 ): void {
@@ -21,11 +21,17 @@ function writeCellsBatched(
   }
 }
 
+interface RosterRowCells {
+  row: number;
+  nameRaw: unknown;
+  emailRaw: unknown;
+}
+
 // Groups the roster table's rows by day index: each group is the ordered
-// list of Name-column cells (with row + raw value) for the rows assigned to
-// that day. Rows for different days can be interleaved in the table, so a
+// list of rows (with row number + raw Name/Email values) assigned to that
+// day. Rows for different days can be interleaved in the table, so a
 // group's rows aren't necessarily contiguous.
-function groupRosterCellsByDay(sheet: GoogleAppsScript.Spreadsheet.Sheet): { [dayIndex: number]: DayBlockCell[] } {
+function groupRosterRowsByDay(sheet: GoogleAppsScript.Spreadsheet.Sheet): { [dayIndex: number]: RosterRowCells[] } {
   const values = readConfigValues(sheet);
   const rosterHeaderRow = findRosterHeaderRow(values);
   if (rosterHeaderRow === -1) {
@@ -34,43 +40,50 @@ function groupRosterCellsByDay(sheet: GoogleAppsScript.Spreadsheet.Sheet): { [da
         ROSTER_NAME_HEADER +
         "' / '" +
         ROSTER_DAY_HEADER +
+        "' / '" +
+        ROSTER_EMAIL_HEADER +
         "' header row on the Config sheet."
     );
   }
   const entries = readRosterEntriesFromValues(values, rosterHeaderRow);
 
-  const byDay: { [dayIndex: number]: DayBlockCell[] } = {};
+  const byDay: { [dayIndex: number]: RosterRowCells[] } = {};
   entries.forEach(function (e) {
     if (!byDay[e.dayIndex]) {
       byDay[e.dayIndex] = [];
     }
-    byDay[e.dayIndex].push({ row: e.row, value: e.name, raw: e.rawName });
+    byDay[e.dayIndex].push({ row: e.row, nameRaw: e.rawName, emailRaw: e.rawEmail });
   });
   return byDay;
 }
 
-// Applies `transform` to each day's roster (as raw cell values, so a
+// Applies `transform` to each day's roster — as raw cell values, so a
 // number, date, or other non-text entry keeps its original type instead of
-// being coerced to a string) and writes the result back to the Name column
-// at the same rows — the Day column is untouched. Shared by rotateRosters
-// and unrotateRosters, which differ only in `transform`.
+// being coerced to a string — and writes the result back to the Name and
+// Email columns at the same rows, moving each row's Email along with its
+// Name so the two stay paired. The Day column is untouched. Shared by
+// rotateRosters and unrotateRosters, which differ only in `transform`.
 function applyRosterTransform(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   transform: (raw: unknown[]) => unknown[]
 ): string[] {
-  const byDay = groupRosterCellsByDay(sheet);
+  const byDay = groupRosterRowsByDay(sheet);
   const affected: string[] = [];
 
   Object.keys(byDay).forEach(function (key) {
     const dayIndex = Number(key);
-    const cells = byDay[dayIndex];
-    if (cells.length < 2) {
+    const rows = byDay[dayIndex];
+    if (rows.length < 2) {
       return;
     }
-    const rawValues = cells.map(function (c) {
-      return c.raw;
+    const nameRaws = rows.map(function (r) {
+      return r.nameRaw;
     });
-    writeCellsBatched(sheet, cells, transform(rawValues), 1);
+    const emailRaws = rows.map(function (r) {
+      return r.emailRaw;
+    });
+    writeCellsBatched(sheet, rows, transform(nameRaws), 1);
+    writeCellsBatched(sheet, rows, transform(emailRaws), 3);
     affected.push(DAY_NAMES[dayIndex]);
   });
 

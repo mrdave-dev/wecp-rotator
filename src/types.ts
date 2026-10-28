@@ -1,12 +1,3 @@
-interface DayBlockCell {
-  row: number;
-  value: string;
-  // The raw cell value (before String()-normalization) so callers that
-  // write a cell back (rotation) can preserve its original type instead of
-  // forcing it to text.
-  raw: unknown;
-}
-
 interface DayConfig {
   dayIndex: number;
   dayName: string;
@@ -20,6 +11,9 @@ interface WorkbookConfig {
   // apply, in this order, to every included day.
   stations: string[];
   days: DayConfig[];
+  // Every email address associated with a given name across all of their
+  // roster rows (deduped), keyed by that exact name string.
+  emailsByName: { [name: string]: string[] };
 }
 
 interface ScheduledDay {

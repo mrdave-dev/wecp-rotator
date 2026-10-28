@@ -28,30 +28,37 @@ function buildConfigTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
     .getRange(row, 1)
     .setValue(
       "List who works each day below: one row per person per workday. Day is one letter " +
-        "— M, T, W, R, or F — so someone working multiple days gets one row per day."
+        "— M, T, W, R, or F — so someone working multiple days gets one row per day. " +
+        "Email is optional; list more than one for the same person with a semicolon, " +
+        "e.g. abc@example.com;def@example.com."
     )
     .setFontStyle("italic")
     .setWrap(true);
   row += 1;
   sheet.getRange(row, 1).setValue(ROSTER_NAME_HEADER).setFontWeight("bold");
   sheet.getRange(row, 2).setValue(ROSTER_DAY_HEADER).setFontWeight("bold");
+  sheet.getRange(row, 3).setValue(ROSTER_EMAIL_HEADER).setFontWeight("bold");
   row += 1;
 
-  const sampleRoster: [string, string][] = [
-    ["Adam", "M"],
-    ["Brenda", "T"],
-    ["Charlie", "R"],
-    ["Diana", "T"],
+  const sampleRoster: [string, string, string][] = [
+    ["Adam", "M", "adam@example.com"],
+    ["Brenda", "T", "brenda@example.com;brenda2@example.com"],
+    ["Charlie", "R", ""],
+    ["Diana", "T", "diana@example.com"],
   ];
   for (let i = 0; i < DEFAULT_ROSTER_ROWS; i++) {
     if (i < sampleRoster.length) {
       sheet.getRange(row + i, 1).setValue(sampleRoster[i][0]);
       sheet.getRange(row + i, 2).setValue(sampleRoster[i][1]);
+      if (sampleRoster[i][2] !== "") {
+        sheet.getRange(row + i, 3).setValue(sampleRoster[i][2]);
+      }
     }
   }
 
   sheet.setColumnWidth(1, 220);
   sheet.setColumnWidth(2, 140);
+  sheet.setColumnWidth(3, 260);
 }
 
 function setupWorkbook(): void {

@@ -12,11 +12,14 @@ const LEGACY_SCHEDULE_SNAPSHOT_PROPERTY = "SCHEDULE_SNAPSHOT_V1";
 const SCHEDULE_TITLE = "WECP Pre-K Rotation Schedule";
 const START_DATE_LABEL = "Start date (first day of the upcoming week):";
 const STATIONS_SECTION_LABEL = "Stations (one per row, top-to-bottom schedule order):";
-// The "Name"/"Day" header row doubles as the Roster table's anchor: readers
-// locate the roster section by finding this exact pair of header cells,
-// rather than a separate label row above it.
+// The "Name"/"Day"/"Email" header row doubles as the Roster table's anchor:
+// readers locate the roster section by finding this exact triple of header
+// cells, rather than a separate label row above it.
 const ROSTER_NAME_HEADER = "Name";
 const ROSTER_DAY_HEADER = "Day";
+// Optional per-row column: zero or more email addresses for that person,
+// separated by semicolons (e.g. "a@x.com;b@y.com").
+const ROSTER_EMAIL_HEADER = "Email";
 
 // Sunday = 0 .. Saturday = 6, matching Date#getDay().
 const DAY_NAMES: string[] = [

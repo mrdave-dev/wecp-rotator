@@ -1,11 +1,10 @@
-// The Config sheet only ever needs columns A (names / section labels) and B
-// (days / list values / the start date): the start date and stations list
-// live in A (label) + B (value), and the roster table lives in A (name) + B
-// (day letter), so every reader shares one range read instead of
-// re-scanning the sheet per section.
+// The Config sheet only ever needs columns A-C: the start date and stations
+// list live in A (label) + B (value), and the roster table lives in A
+// (name) + B (day letter) + C (optional email addresses) — so every reader
+// shares one range read instead of re-scanning the sheet per section.
 function readConfigValues(sheet: GoogleAppsScript.Spreadsheet.Sheet): unknown[][] {
   const lastRow = sheet.getLastRow();
-  return lastRow > 0 ? sheet.getRange(1, 1, lastRow, 2).getValues() : [];
+  return lastRow > 0 ? sheet.getRange(1, 1, lastRow, 3).getValues() : [];
 }
 
 function findStartDateRow(values: unknown[][]): number {
@@ -35,12 +34,13 @@ function readStartDateFromValues(values: unknown[][]): Date {
   );
 }
 
-// Finds the "Name"/"Day" header row that anchors the Roster table.
+// Finds the "Name"/"Day"/"Email" header row that anchors the Roster table.
 function findRosterHeaderRow(values: unknown[][]): number {
   for (let r = 0; r < values.length; r++) {
     if (
       normalizeCell(values[r][0]) === ROSTER_NAME_HEADER &&
-      normalizeCell(values[r][1]) === ROSTER_DAY_HEADER
+      normalizeCell(values[r][1]) === ROSTER_DAY_HEADER &&
+      normalizeCell(values[r][2]) === ROSTER_EMAIL_HEADER
     ) {
       return r + 1;
     }
@@ -74,6 +74,8 @@ function readStationsFromValues(values: unknown[][], rosterHeaderRow: number): s
         ROSTER_NAME_HEADER +
         "' / '" +
         ROSTER_DAY_HEADER +
+        "' / '" +
+        ROSTER_EMAIL_HEADER +
         "' header row). Please move it above the roster."
     );
   }
@@ -103,11 +105,32 @@ interface RosterEntry {
   name: string;
   rawName: unknown;
   dayIndex: number;
+  // The Email cell's raw, unsplit value, so rotation can move it as one
+  // unit alongside the name it belongs to.
+  rawEmail: unknown;
+  // Zero or more email addresses from this row's Email cell (split on
+  // ";", trimmed, blanks dropped). Not validated here — the Email column
+  // is optional and unrelated to filling the schedule, so a malformed
+  // address shouldn't block Fill Grid; it's validated when actually used
+  // to draft an email.
+  emails: string[];
 }
 
-// Reads the flat roster table from the row after its "Name"/"Day" header
-// through the end of the sheet, skipping blank rows. Each non-blank row
-// must have both a name and a valid day letter.
+function splitEmails(raw: unknown): string[] {
+  return normalizeCell(raw)
+    .split(";")
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(function (s) {
+      return s !== "";
+    });
+}
+
+// Reads the flat roster table from the row after its "Name"/"Day"/"Email"
+// header through the end of the sheet, skipping blank rows. Each non-blank
+// row must have both a name and a valid day letter; the Email cell is
+// optional.
 function readRosterEntriesFromValues(values: unknown[][], rosterHeaderRow: number): RosterEntry[] {
   const entries: RosterEntry[] = [];
   for (let row = rosterHeaderRow + 1; row <= values.length; row++) {
@@ -115,10 +138,11 @@ function readRosterEntriesFromValues(values: unknown[][], rosterHeaderRow: numbe
     const rawDay = values[row - 1][1];
     const name = normalizeCell(rawName);
     const dayLetter = normalizeCell(rawDay);
+    const email = normalizeCell(values[row - 1][2]);
 
     // Defensive: skip a row that duplicates the header text (e.g. the user
     // accidentally pasted it again) rather than trying to parse it as data.
-    if (name === ROSTER_NAME_HEADER && dayLetter === ROSTER_DAY_HEADER) {
+    if (name === ROSTER_NAME_HEADER && dayLetter === ROSTER_DAY_HEADER && email === ROSTER_EMAIL_HEADER) {
       continue;
     }
     if (name === "" && dayLetter === "") {
@@ -141,9 +165,37 @@ function readRosterEntriesFromValues(values: unknown[][], rosterHeaderRow: numbe
       );
     }
 
-    entries.push({ row, name, rawName, dayIndex });
+    entries.push({
+      row,
+      name,
+      rawName,
+      dayIndex,
+      rawEmail: values[row - 1][2],
+      emails: splitEmails(values[row - 1][2]),
+    });
   }
   return entries;
+}
+
+// Every email address associated with a given name across all of their
+// roster rows (e.g. someone who works both Monday and Wednesday only needs
+// the address filled in on one of those rows), deduped and keyed by name.
+function buildEmailsByName(entries: RosterEntry[]): { [name: string]: string[] } {
+  const map: { [name: string]: string[] } = {};
+  entries.forEach(function (e) {
+    if (e.emails.length === 0) {
+      return;
+    }
+    if (!map[e.name]) {
+      map[e.name] = [];
+    }
+    e.emails.forEach(function (email) {
+      if (map[e.name].indexOf(email) === -1) {
+        map[e.name].push(email);
+      }
+    });
+  });
+  return map;
 }
 
 function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
@@ -156,6 +208,8 @@ function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
         ROSTER_NAME_HEADER +
         "' / '" +
         ROSTER_DAY_HEADER +
+        "' / '" +
+        ROSTER_EMAIL_HEADER +
         "' header row on the Config sheet."
     );
   }
@@ -178,5 +232,10 @@ function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
     };
   });
 
-  return { startDate: startDate, stations: stations, days: days };
+  return {
+    startDate: startDate,
+    stations: stations,
+    days: days,
+    emailsByName: buildEmailsByName(entries),
+  };
 }
