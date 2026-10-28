@@ -27,9 +27,13 @@ function readStartDateFromValues(values: unknown[][]): Date {
   );
 }
 
-function findRosterSectionLabelRow(values: unknown[][]): number {
+// Finds the "Name"/"Day" header row that anchors the Roster table.
+function findRosterHeaderRow(values: unknown[][]): number {
   for (let r = 0; r < values.length; r++) {
-    if (normalizeCell(values[r][0]) === ROSTER_SECTION_LABEL) {
+    if (
+      normalizeCell(values[r][0]) === ROSTER_NAME_HEADER &&
+      normalizeCell(values[r][1]) === ROSTER_DAY_HEADER
+    ) {
       return r + 1;
     }
   }
@@ -39,8 +43,9 @@ function findRosterSectionLabelRow(values: unknown[][]): number {
 // Stations are a single list defined once, read from the Stations label's
 // own row (so a station typed directly next to the label, matching how the
 // start date works, isn't dropped) through the row before the Roster
-// section — so, like the roster table, users can insert extra rows freely.
-function readStationsFromValues(values: unknown[][], rosterLabelRow: number): string[] {
+// table's header row — so, like the roster table, users can insert extra
+// rows freely.
+function readStationsFromValues(values: unknown[][], rosterHeaderRow: number): string[] {
   let labelRow = -1;
   for (let r = 0; r < values.length; r++) {
     if (normalizeCell(values[r][0]) === STATIONS_SECTION_LABEL) {
@@ -53,17 +58,19 @@ function readStationsFromValues(values: unknown[][], rosterLabelRow: number): st
       "Couldn't find the '" + STATIONS_SECTION_LABEL + "' row on the Config sheet."
     );
   }
-  if (rosterLabelRow !== -1 && labelRow > rosterLabelRow) {
+  if (rosterHeaderRow !== -1 && labelRow > rosterHeaderRow) {
     throw new Error(
       "The '" +
         STATIONS_SECTION_LABEL +
-        "' section must come before the '" +
-        ROSTER_SECTION_LABEL +
-        "' section. Please move it above the roster."
+        "' section must come before the Roster table (the '" +
+        ROSTER_NAME_HEADER +
+        "' / '" +
+        ROSTER_DAY_HEADER +
+        "' header row). Please move it above the roster."
     );
   }
 
-  const blockEnd = rosterLabelRow !== -1 ? rosterLabelRow - 1 : values.length;
+  const blockEnd = rosterHeaderRow !== -1 ? rosterHeaderRow - 1 : values.length;
 
   const stations: string[] = [];
   const seen: { [name: string]: boolean } = {};
@@ -90,19 +97,20 @@ interface RosterEntry {
   dayIndex: number;
 }
 
-// Reads the flat roster table from the Roster section's own row (so a name
-// typed directly next to the label isn't dropped) through the end of the
-// sheet, skipping blank rows and the "Name"/"Day" header row. Each
-// non-blank row must have both a name and a valid day letter.
-function readRosterEntriesFromValues(values: unknown[][], rosterLabelRow: number): RosterEntry[] {
+// Reads the flat roster table from the row after its "Name"/"Day" header
+// through the end of the sheet, skipping blank rows. Each non-blank row
+// must have both a name and a valid day letter.
+function readRosterEntriesFromValues(values: unknown[][], rosterHeaderRow: number): RosterEntry[] {
   const entries: RosterEntry[] = [];
-  for (let row = rosterLabelRow; row <= values.length; row++) {
+  for (let row = rosterHeaderRow + 1; row <= values.length; row++) {
     const rawName = values[row - 1][0];
     const rawDay = values[row - 1][1];
     const name = normalizeCell(rawName);
     const dayLetter = normalizeCell(rawDay);
 
-    if (name === ROSTER_SECTION_LABEL || name === ROSTER_NAME_HEADER || dayLetter === ROSTER_DAY_HEADER) {
+    // Defensive: skip a row that duplicates the header text (e.g. the user
+    // accidentally pasted it again) rather than trying to parse it as data.
+    if (name === ROSTER_NAME_HEADER && dayLetter === ROSTER_DAY_HEADER) {
       continue;
     }
     if (name === "" && dayLetter === "") {
@@ -133,14 +141,18 @@ function readRosterEntriesFromValues(values: unknown[][], rosterLabelRow: number
 function readConfig(sheet: GoogleAppsScript.Spreadsheet.Sheet): WorkbookConfig {
   const values = readConfigValues(sheet);
   const startDate = readStartDateFromValues(values);
-  const rosterLabelRow = findRosterSectionLabelRow(values);
-  if (rosterLabelRow === -1) {
+  const rosterHeaderRow = findRosterHeaderRow(values);
+  if (rosterHeaderRow === -1) {
     throw new Error(
-      "Couldn't find the '" + ROSTER_SECTION_LABEL + "' row on the Config sheet."
+      "Couldn't find the '" +
+        ROSTER_NAME_HEADER +
+        "' / '" +
+        ROSTER_DAY_HEADER +
+        "' header row on the Config sheet."
     );
   }
-  const stations = readStationsFromValues(values, rosterLabelRow);
-  const entries = readRosterEntriesFromValues(values, rosterLabelRow);
+  const stations = readStationsFromValues(values, rosterHeaderRow);
+  const entries = readRosterEntriesFromValues(values, rosterHeaderRow);
 
   const days: DayConfig[] = [1, 2, 3, 4, 5].map(function (dayIndex) {
     const roster = entries

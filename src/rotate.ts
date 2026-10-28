@@ -27,13 +27,17 @@ function writeCellsBatched(
 // group's rows aren't necessarily contiguous.
 function groupRosterCellsByDay(sheet: GoogleAppsScript.Spreadsheet.Sheet): { [dayIndex: number]: DayBlockCell[] } {
   const values = readConfigValues(sheet);
-  const rosterLabelRow = findRosterSectionLabelRow(values);
-  if (rosterLabelRow === -1) {
+  const rosterHeaderRow = findRosterHeaderRow(values);
+  if (rosterHeaderRow === -1) {
     throw new Error(
-      "Couldn't find the '" + ROSTER_SECTION_LABEL + "' row on the Config sheet."
+      "Couldn't find the '" +
+        ROSTER_NAME_HEADER +
+        "' / '" +
+        ROSTER_DAY_HEADER +
+        "' header row on the Config sheet."
     );
   }
-  const entries = readRosterEntriesFromValues(values, rosterLabelRow);
+  const entries = readRosterEntriesFromValues(values, rosterHeaderRow);
 
   const byDay: { [dayIndex: number]: DayBlockCell[] } = {};
   entries.forEach(function (e) {

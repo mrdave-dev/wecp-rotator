@@ -14,12 +14,21 @@ Open the spreadsheet and use the **WECP** menu:
 - **Set Up Workbook** creates a `Config` sheet and a `Schedule` sheet.
   The Config sheet has a start date, a single **Stations** list (defined
   once — the same stations apply to every day), and a single **Roster**
-  table: one row per person per workday, as a name and a one-letter day
-  code (`M`, `T`, `W`, `R`, or `F` for Mon-Fri; `R` is Thursday, to avoid
-  clashing with Tuesday's `T`). Someone who works multiple days just gets
-  one row per day. A day is only scheduled if at least one roster row names
-  it — there's no separate day toggle. Comes pre-filled with an example
-  (Anna/Brenda/Charlie on Monday, David/Evan/Francine on Wednesday).
+  table headed `Name | Day`: one row per person per workday, e.g.
+
+  ```
+  Name     Day
+  Adam     M
+  Brenda   T
+  Charlie  R
+  Diana    T
+  ```
+
+  Day is one letter — `M`, `T`, `W`, `R`, or `F` for Mon-Fri (`R` is
+  Thursday, to avoid clashing with Tuesday's `T`). Someone who works
+  multiple days just gets one row per day. A day is only scheduled if at
+  least one roster row names it — there's no separate day toggle. Comes
+  pre-filled with the example above.
 - Fill in the Config sheet: list your stations (in the order they should
   appear on the schedule), set the start date (the first day of the
   upcoming week), and list who works which day in the Roster table.

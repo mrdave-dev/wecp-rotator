@@ -24,19 +24,24 @@ function buildConfigTemplate(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
   }
   row += DEFAULT_STATION_ROWS + 1;
 
-  sheet.getRange(row, 1).setValue(ROSTER_SECTION_LABEL).setFontWeight("bold").setFontStyle("italic");
+  sheet
+    .getRange(row, 1)
+    .setValue(
+      "List who works each day below: one row per person per workday. Day is one letter " +
+        "— M, T, W, R, or F — so someone working multiple days gets one row per day."
+    )
+    .setFontStyle("italic")
+    .setWrap(true);
   row += 1;
-  sheet.getRange(row, 1).setValue(ROSTER_NAME_HEADER).setFontStyle("italic");
-  sheet.getRange(row, 2).setValue(ROSTER_DAY_HEADER).setFontStyle("italic");
+  sheet.getRange(row, 1).setValue(ROSTER_NAME_HEADER).setFontWeight("bold");
+  sheet.getRange(row, 2).setValue(ROSTER_DAY_HEADER).setFontWeight("bold");
   row += 1;
 
   const sampleRoster: [string, string][] = [
-    ["Anna", "M"],
-    ["Brenda", "M"],
-    ["Charlie", "M"],
-    ["David", "W"],
-    ["Evan", "W"],
-    ["Francine", "W"],
+    ["Adam", "M"],
+    ["Brenda", "T"],
+    ["Charlie", "R"],
+    ["Diana", "T"],
   ];
   for (let i = 0; i < DEFAULT_ROSTER_ROWS; i++) {
     if (i < sampleRoster.length) {
