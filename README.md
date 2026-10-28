@@ -35,11 +35,14 @@ Open the spreadsheet and use the **WECP** menu:
 - **Fill Grid for Upcoming Week** reads the Config sheet and writes the
   `Schedule` grid: one column per included day (in calendar order from the
   start date), one row per station (in the order they're listed in Config),
-  and each cell is the person assigned to that station that day. If a day's
-  roster is longer or shorter than the station list, it cycles across the
-  stations in order. Only the grid itself (title, day headers, and station
-  rows) is touched — any other content on the Schedule sheet, like
-  announcements below the grid, is left alone.
+  and each cell is the person assigned to that station that day, filling
+  stations top-to-bottom in the order that day's roster is listed. If a
+  day's roster is shorter than the station list, the remaining stations are
+  left blank for that day rather than repeating someone; extra people
+  beyond the station count just aren't assigned anywhere that day. Only the
+  grid itself (title, day headers, and station rows) is touched — any other
+  content on the Schedule sheet, like announcements below the grid, is left
+  alone.
 - **Next Week** moves the whole workbook forward one week in a single
   click: the Config start date advances by 7 days, each day's roster
   rotates (the last person moves to the front, everyone else moves down a

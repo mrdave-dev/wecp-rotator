@@ -5,9 +5,13 @@ function gridKey(station: string, dayIndex: number): string {
 // Builds the upcoming week's day/person assignments from the Config data.
 // Stations are a single global list (already validated unique by
 // readStationsFromValues), applied in the same order to every included day.
-// Days run in calendar order starting at startDate (not Sunday-Saturday
-// order), so e.g. a Wednesday start date with Mon/Wed/Fri selected produces
-// Wed, Fri, then next Mon.
+// A day's roster fills its stations top-to-bottom, one person per station;
+// if there aren't enough people for every station that day, the remaining
+// stations are left blank rather than repeating someone. Extra people
+// beyond the station count simply aren't assigned anywhere that day. Days
+// run in calendar order starting at startDate (not Sunday-Saturday order),
+// so e.g. a Wednesday start date with Mon/Wed/Fri selected produces Wed,
+// Fri, then next Mon.
 function computeAssignments(config: WorkbookConfig): ScheduleAssignment {
   const tz = getSpreadsheetTz();
   const startDayIndex = getWeekdayIndex(config.startDate, tz);
@@ -47,7 +51,9 @@ function computeAssignments(config: WorkbookConfig): ScheduleAssignment {
     });
 
     config.stations.forEach(function (station, i) {
-      grid[gridKey(station, d.dayIndex)] = d.roster[i % d.roster.length];
+      if (i < d.roster.length) {
+        grid[gridKey(station, d.dayIndex)] = d.roster[i];
+      }
     });
   });
 
