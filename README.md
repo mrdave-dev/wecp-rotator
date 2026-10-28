@@ -40,24 +40,26 @@ Open the spreadsheet and use the **WECP** menu:
   stations in order. Only the grid itself (title, day headers, and station
   rows) is touched — any other content on the Schedule sheet, like
   announcements below the grid, is left alone.
-- **Rotate & Fill for Upcoming Week** does Rotate Rosters and Fill Grid in
-  one click.
-- **Rotate Rosters** shifts each included day's roster by one: the last
-  person moves to the front and everyone else moves down a spot. This only
-  changes the saved Config order — run Fill Grid afterwards to apply it to
-  the schedule.
-- **Unrotate Rosters** undoes one Rotate Rosters step: the first person
-  moves to the end and everyone else moves up a spot.
+- **Next Week** moves the whole workbook forward one week in a single
+  click: the Config start date advances by 7 days, each day's roster
+  rotates (the last person moves to the front, everyone else moves down a
+  spot), and the `Schedule` grid is filled for the resulting week.
+- **Previous Week** is the mirror of Next Week: the start date moves back 7
+  days, each day's roster un-rotates (the first person moves to the end,
+  everyone else moves up a spot), and the grid is filled for that week.
 - **Add 16 Test Names** is a development/testing helper: appends 16 sample
-  names to the Roster table, cycling through M-F, so Fill Grid/Rotate can be
-  exercised against a nontrivial roster without typing names in by hand. It
-  only adds rows — it never touches what's already there.
+  names to the Roster table, cycling through M-F, so Fill Grid/Next Week
+  can be exercised against a nontrivial roster without typing names in by
+  hand. It only adds rows — it never touches what's already there.
 
-Fill Grid and Rotate & Fill both check whether the Schedule grid was
-hand-edited since it was last generated, and confirm before overwriting. They
-also confirm separately if a larger grid than last time (a new station or
-day) would grow into rows or columns that already have other content on
-them, since that's outside the area the hand-edit check watches.
+Fill Grid, Next Week, and Previous Week all check whether the Schedule grid
+was hand-edited since it was last generated, and confirm before
+overwriting. They also confirm separately if a larger grid than last time
+(a new station or day) would grow into rows or columns that already have
+other content on them, since that's outside the area the hand-edit check
+watches. For Next Week/Previous Week, these checks (and the date/roster
+changes) only happen after you confirm — a "No" or a config problem leaves
+the start date and rosters untouched.
 
 ## Development
 

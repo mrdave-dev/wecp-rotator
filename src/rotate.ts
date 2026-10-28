@@ -92,3 +92,20 @@ function unrotateRosters(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[] {
     return raw.slice(1).concat([raw[0]]);
   });
 }
+
+// Shifts the Config sheet's start date by `days` (positive to move forward
+// a week, negative to move back) and writes it back in place.
+function advanceStartDate(sheet: GoogleAppsScript.Spreadsheet.Sheet, days: number): void {
+  const values = readConfigValues(sheet);
+  const row = findStartDateRow(values);
+  if (row === -1) {
+    throw new Error(
+      "Couldn't find the '" + START_DATE_LABEL + "' row on the Config sheet."
+    );
+  }
+  const current = readStartDateFromValues(values);
+  const tz = getSpreadsheetTz();
+  const cell = sheet.getRange(row, 2);
+  cell.setValue(addCalendarDays(current, tz, days));
+  cell.setNumberFormat("M/d/yyyy");
+}

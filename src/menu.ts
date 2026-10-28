@@ -4,10 +4,9 @@ function onOpen(): void {
     .addItem("Set Up Workbook", "menuSetupWorkbook")
     .addSeparator()
     .addItem("Fill Grid for Upcoming Week", "menuFillGrid")
-    .addItem("Rotate & Fill for Upcoming Week", "menuRotateAndFill")
     .addSeparator()
-    .addItem("Rotate Rosters", "menuRotateRosters")
-    .addItem("Unrotate Rosters", "menuUnrotateRosters")
+    .addItem("Next Week", "menuNextWeek")
+    .addItem("Previous Week", "menuPreviousWeek")
     .addSeparator()
     .addItem("Add 16 Test Names", "menuPopulateTestNames")
     .addToUi();
@@ -129,99 +128,74 @@ function menuFillGrid(): void {
   }
 }
 
-function menuRotateAndFill(): void {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    const configSheet = requireConfigSheet(ui);
-    if (!configSheet) {
-      return;
-    }
-    const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
-    if (!confirmDirtyOverwrite(ui, scheduleSheet)) {
-      return;
-    }
-
-    // Validate (and get the growth-overwrite confirmation) against the
-    // current config *before* rotating anything, so a "No" or a config
-    // problem leaves the rosters untouched. Rotation only reorders each
-    // day's roster — it never changes counts — so this check's outcome
-    // still holds after rotating.
-    const preAssignment = computeAssignments(readConfig(configSheet));
-    if (!checkAssignment(ui, preAssignment)) {
-      return;
-    }
-    if (!confirmGrowthOverwrite(ui, scheduleSheet, preAssignment)) {
-      return;
-    }
-
-    rotateRosters(configSheet);
-
-    const config = readConfig(configSheet);
-    const assignment = computeAssignments(config);
-    writeSchedule(scheduleSheet, assignment);
-    getSpreadsheet().setActiveSheet(scheduleSheet);
-    ui.alert(
-      "Schedule updated",
-      "Rosters were rotated and the grid has been filled for the week of " +
-        formatSheetDate(config.startDate) +
-        ".",
-      ui.ButtonSet.OK
-    );
-  } catch (e) {
-    showError(ui, e);
-  }
-}
-
-// Shared by "Rotate Rosters" and "Unrotate Rosters": applies `action`, then
-// reports which days changed (or that there was nothing to do).
-function menuRotateOrUnrotate(
+// Shared by "Next Week" and "Previous Week": both advance the Config
+// sheet's start date by a week (forward or back), rotate the rosters the
+// same direction, and fill the grid for the resulting week — in that
+// order, and only once every check has passed, so a "No" or a config
+// problem leaves the start date and rosters untouched.
+function moveWeek(
   ui: GoogleAppsScript.Base.Ui,
   configSheet: GoogleAppsScript.Spreadsheet.Sheet,
-  action: (sheet: GoogleAppsScript.Spreadsheet.Sheet) => string[],
-  baseVerb: string,
-  pastVerb: string
+  days: number,
+  rotate: (sheet: GoogleAppsScript.Spreadsheet.Sheet) => string[],
+  directionLabel: string
 ): void {
-  const affectedDays = action(configSheet);
-  if (affectedDays.length === 0) {
-    ui.alert(
-      "Nothing to " + baseVerb,
-      "No included day has a roster with more than one person to " + baseVerb + ".",
-      ui.ButtonSet.OK
-    );
+  const scheduleSheet = getOrCreateSheet(SCHEDULE_SHEET_NAME);
+  if (!confirmDirtyOverwrite(ui, scheduleSheet)) {
     return;
   }
+
+  // Rotation only reorders each day's roster, and the date shift doesn't
+  // change which days/stations are in play, so neither changes the
+  // assignment's shape — validating (and getting the growth-overwrite
+  // confirmation) against the current config still holds after both.
+  const preAssignment = computeAssignments(readConfig(configSheet));
+  if (!checkAssignment(ui, preAssignment)) {
+    return;
+  }
+  if (!confirmGrowthOverwrite(ui, scheduleSheet, preAssignment)) {
+    return;
+  }
+
+  advanceStartDate(configSheet, days);
+  rotate(configSheet);
+
+  const config = readConfig(configSheet);
+  const assignment = computeAssignments(config);
+  writeSchedule(scheduleSheet, assignment);
+  getSpreadsheet().setActiveSheet(scheduleSheet);
   ui.alert(
-    "Rosters " + pastVerb,
-    "Days " +
-      pastVerb +
-      ": " +
-      affectedDays.join(", ") +
-      '.\nUse "Fill Grid for Upcoming Week" to apply the new order to the schedule.',
+    "Schedule updated",
+    "Moved to " +
+      directionLabel +
+      ": rosters were rotated and the grid has been filled for the week of " +
+      formatSheetDate(config.startDate) +
+      ".",
     ui.ButtonSet.OK
   );
 }
 
-function menuRotateRosters(): void {
+function menuNextWeek(): void {
   const ui = SpreadsheetApp.getUi();
   try {
     const configSheet = requireConfigSheet(ui);
     if (!configSheet) {
       return;
     }
-    menuRotateOrUnrotate(ui, configSheet, rotateRosters, "rotate", "rotated");
+    moveWeek(ui, configSheet, 7, rotateRosters, "next week");
   } catch (e) {
     showError(ui, e);
   }
 }
 
-function menuUnrotateRosters(): void {
+function menuPreviousWeek(): void {
   const ui = SpreadsheetApp.getUi();
   try {
     const configSheet = requireConfigSheet(ui);
     if (!configSheet) {
       return;
     }
-    menuRotateOrUnrotate(ui, configSheet, unrotateRosters, "unrotate", "unrotated");
+    moveWeek(ui, configSheet, -7, unrotateRosters, "previous week");
   } catch (e) {
     showError(ui, e);
   }

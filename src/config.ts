@@ -8,22 +8,30 @@ function readConfigValues(sheet: GoogleAppsScript.Spreadsheet.Sheet): unknown[][
   return lastRow > 0 ? sheet.getRange(1, 1, lastRow, 2).getValues() : [];
 }
 
-function readStartDateFromValues(values: unknown[][]): Date {
+function findStartDateRow(values: unknown[][]): number {
   for (let r = 0; r < values.length; r++) {
     if (normalizeCell(values[r][0]) === START_DATE_LABEL) {
-      const value = values[r][1];
-      if (value instanceof Date) {
-        return value;
-      }
-      throw new Error(
-        "The start date cell doesn't contain a valid date. Please pick a date next to '" +
-          START_DATE_LABEL +
-          "'."
-      );
+      return r + 1;
     }
   }
+  return -1;
+}
+
+function readStartDateFromValues(values: unknown[][]): Date {
+  const row = findStartDateRow(values);
+  if (row === -1) {
+    throw new Error(
+      "Couldn't find the '" + START_DATE_LABEL + "' row on the Config sheet."
+    );
+  }
+  const value = values[row - 1][1];
+  if (value instanceof Date) {
+    return value;
+  }
   throw new Error(
-    "Couldn't find the '" + START_DATE_LABEL + "' row on the Config sheet."
+    "The start date cell doesn't contain a valid date. Please pick a date next to '" +
+      START_DATE_LABEL +
+      "'."
   );
 }
 
