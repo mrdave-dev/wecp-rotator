@@ -118,6 +118,88 @@ function isScheduleDirty(sheet: GoogleAppsScript.Spreadsheet.Sheet): boolean {
   return currentHash !== saved.hash;
 }
 
+// Scans downward from `fromRow` (within columns 1..cols) for a contiguous
+// run of non-blank rows, stopping at the first fully-blank row or the end
+// of the sheet. Returns fromRow - 1 (no extension) if fromRow itself is
+// blank.
+function lastContiguousNonBlankRow(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  fromRow: number,
+  cols: number
+): number {
+  const lastSheetRow = sheet.getLastRow();
+  if (fromRow > lastSheetRow || cols <= 0) {
+    return fromRow - 1;
+  }
+  const values = sheet.getRange(fromRow, 1, lastSheetRow - fromRow + 1, cols).getValues();
+  let row = fromRow - 1;
+  for (let i = 0; i < values.length; i++) {
+    const hasContent = values[i].some(function (v) {
+      return normalizeCell(v) !== "";
+    });
+    if (!hasContent) {
+      break;
+    }
+    row = fromRow + i;
+  }
+  return row;
+}
+
+// The column mirror of lastContiguousNonBlankRow: scans rightward from
+// `fromCol` (within rows 1..rows) for a contiguous run of non-blank
+// columns.
+function lastContiguousNonBlankCol(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  fromCol: number,
+  rows: number
+): number {
+  const lastSheetCol = sheet.getLastColumn();
+  if (fromCol > lastSheetCol || rows <= 0) {
+    return fromCol - 1;
+  }
+  const values = sheet.getRange(1, fromCol, rows, lastSheetCol - fromCol + 1).getValues();
+  let col = fromCol - 1;
+  for (let j = 0; j < lastSheetCol - fromCol + 1; j++) {
+    let hasContent = false;
+    for (let i = 0; i < rows; i++) {
+      if (normalizeCell(values[i][j]) !== "") {
+        hasContent = true;
+        break;
+      }
+    }
+    if (!hasContent) {
+      break;
+    }
+    col = fromCol + j;
+  }
+  return col;
+}
+
+// The rectangle this script should treat as "already its own" when
+// deciding what to clear and what to warn about: whatever the saved
+// snapshot says, extended to cover any content that butts directly against
+// the new grid with no gap. That contiguous-no-gap content is very likely a
+// stale leftover from an earlier write whose snapshot was never saved (a
+// crash between writing and saving, or document properties that didn't
+// carry over when the file was copied) rather than unrelated
+// hand-maintained content — the latter is reliably separated from the grid
+// by at least one blank row (e.g. announcements below it).
+function previousGridExtent(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  assignment: ScheduleAssignment
+): { rows: number; cols: number } {
+  const { totalRows, numCols } = scheduleGridDimensions(assignment);
+  const saved = readScheduleSnapshot();
+  const savedRows = saved ? saved.rows : 0;
+  const savedCols = saved ? saved.cols : 0;
+  const trailingRow = lastContiguousNonBlankRow(sheet, totalRows + 1, numCols);
+  const trailingCol = lastContiguousNonBlankCol(sheet, numCols + 1, totalRows);
+  return {
+    rows: Math.max(savedRows, trailingRow),
+    cols: Math.max(savedCols, trailingCol),
+  };
+}
+
 // True when (re)writing this assignment would grow the grid into rows or
 // columns beyond what the last generation covered, and some of those cells
 // already hold content — e.g. the grid gained a station or a day and would
@@ -129,9 +211,9 @@ function wouldOverwriteContentOutsideGrid(
   assignment: ScheduleAssignment
 ): boolean {
   const { totalRows, numCols } = scheduleGridDimensions(assignment);
-  const previous = readScheduleSnapshot();
-  const prevRows = previous ? previous.rows : 0;
-  const prevCols = previous ? previous.cols : 0;
+  const extent = previousGridExtent(sheet, assignment);
+  const prevRows = extent.rows;
+  const prevCols = extent.cols;
   if (totalRows <= prevRows && numCols <= prevCols) {
     return false;
   }
@@ -163,28 +245,28 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
   const gridRows = assignment.stationOrder.length;
 
   // Only clear the rectangle this script owns (the title, header, and
-  // station rows), unioned with whatever extent was written last time, so a
-  // shrinking grid doesn't leave stale cells behind. Anything below or
-  // beside that — e.g. announcements the user maintains by hand — is left
-  // untouched (see wouldOverwriteContentOutsideGrid, checked by callers
-  // before this runs).
-  const previous = readScheduleSnapshot();
-  let clearRows: number;
-  let clearCols: number;
-  if (previous) {
-    clearRows = Math.max(totalRows, Math.min(previous.rows, sheet.getMaxRows()));
-    clearCols = Math.max(numCols, Math.min(previous.cols, sheet.getMaxColumns()));
-  } else if (PropertiesService.getDocumentProperties().getProperty(LEGACY_SCHEDULE_SNAPSHOT_PROPERTY)) {
-    // Upgrading from a version with no {rows,cols,hash} snapshot at all: that
-    // version always cleared the *whole* sheet before writing, so nothing but
-    // script-owned content could have survived here. Clear everything once so
-    // no stale row/column from that version lingers, then start tracking the
-    // new, scoped snapshot below.
-    clearRows = Math.max(totalRows, sheet.getLastRow());
-    clearCols = Math.max(numCols, sheet.getLastColumn());
-  } else {
-    clearRows = totalRows;
-    clearCols = numCols;
+  // station rows), unioned with whatever extent was written last time (plus
+  // any contiguous, no-gap leftover content — see previousGridExtent), so a
+  // shrinking grid doesn't leave stale cells behind. Anything genuinely
+  // separate — e.g. announcements the user maintains by hand below a gap —
+  // is left untouched (see wouldOverwriteContentOutsideGrid, checked by
+  // callers before this runs).
+  const extent = previousGridExtent(sheet, assignment);
+  let clearRows = Math.max(totalRows, Math.min(extent.rows, sheet.getMaxRows()));
+  let clearCols = Math.max(numCols, Math.min(extent.cols, sheet.getMaxColumns()));
+  if (
+    extent.rows === 0 &&
+    extent.cols === 0 &&
+    PropertiesService.getDocumentProperties().getProperty(LEGACY_SCHEDULE_SNAPSHOT_PROPERTY)
+  ) {
+    // Upgrading from a version with no {rows,cols,hash} snapshot at all, and
+    // with no contiguous leftover content detected either: that version
+    // always cleared the *whole* sheet before writing, so nothing but
+    // script-owned content could have survived here. Clear everything once
+    // so no stale row/column from that version lingers, then start tracking
+    // the new, scoped snapshot below.
+    clearRows = Math.max(clearRows, sheet.getLastRow());
+    clearCols = Math.max(clearCols, sheet.getLastColumn());
   }
   PropertiesService.getDocumentProperties().deleteProperty(LEGACY_SCHEDULE_SNAPSHOT_PROPERTY);
 
@@ -216,7 +298,11 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
   headerRange
     .setFontWeight("bold")
     .setFontSize(SCHEDULE_GRID_FONT_SIZE)
-    .setWrap(true)
+    // Not wrapping: the day name and date are already split onto their own
+    // lines via the "\n" in formatDayHeader. Wrapping on top of that makes
+    // autoResizeColumns size the column to fit the shorter *body* cells
+    // instead of the header's own longer lines, so "Wednesday" ends up
+    // wrapping again, mid-word, in too narrow a column.
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
     .setBackground("#D9D9D9")
@@ -252,6 +338,10 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
   // contains part of a wider merged cell.
   sheet.setFrozenRows(headerRow);
   sheet.autoResizeColumns(1, numCols);
+  sheet.setColumnWidth(1, Math.max(sheet.getColumnWidth(1), SCHEDULE_MIN_STATION_COLUMN_WIDTH));
+  for (let col = 2; col <= numCols; col++) {
+    sheet.setColumnWidth(col, Math.max(sheet.getColumnWidth(col), SCHEDULE_MIN_DAY_COLUMN_WIDTH));
+  }
 
   saveScheduleSnapshot(sheet, totalRows, numCols);
 }

@@ -70,3 +70,9 @@ const SCHEDULE_GRID_FONT_SIZE = 16;
 const SCHEDULE_TITLE_ROW_HEIGHT = 50;
 const SCHEDULE_HEADER_ROW_HEIGHT = 46;
 const SCHEDULE_BODY_ROW_HEIGHT = 34;
+// Floors for autoResizeColumns, which sizes a column to fit its widest
+// *unwrapped* line — enough to guarantee "Wednesday" and a date like
+// "11/4/2026" each fit on one line at SCHEDULE_GRID_FONT_SIZE without the
+// header cell's day-name/date lines wrapping again mid-word.
+const SCHEDULE_MIN_STATION_COLUMN_WIDTH = 160;
+const SCHEDULE_MIN_DAY_COLUMN_WIDTH = 130;
