@@ -242,8 +242,10 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
     sheet.getRange(headerRow + 1, 1, gridRows, 1).setBackgrounds(stationColors);
   }
 
+  // Not freezing a column here: the title cell is merged across every
+  // column in the grid, and Sheets rejects freezing a column that only
+  // contains part of a wider merged cell.
   sheet.setFrozenRows(headerRow);
-  sheet.setFrozenColumns(1);
   sheet.autoResizeColumns(1, numCols);
 
   saveScheduleSnapshot(sheet, totalRows, numCols);
