@@ -204,22 +204,24 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
     .getRange(titleRow, 1)
     .setValue(SCHEDULE_TITLE)
     .setFontWeight("bold")
-    .setFontSize(24)
+    .setFontSize(SCHEDULE_TITLE_FONT_SIZE)
     .setFontColor("#1155CC")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle");
-  sheet.setRowHeight(titleRow, 50);
+  sheet.setRowHeight(titleRow, SCHEDULE_TITLE_ROW_HEIGHT);
 
   const headerValues = [""].concat(assignment.orderedDays.map(formatDayHeader));
   const headerRange = sheet.getRange(headerRow, 1, 1, numCols);
   headerRange.setValues([headerValues]);
   headerRange
     .setFontWeight("bold")
+    .setFontSize(SCHEDULE_GRID_FONT_SIZE)
     .setWrap(true)
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
     .setBackground("#D9D9D9")
     .setBorder(true, true, true, true, true, true);
+  sheet.setRowHeight(headerRow, SCHEDULE_HEADER_ROW_HEIGHT);
 
   if (gridRows > 0) {
     const gridValues = assignment.stationOrder.map(function (station) {
@@ -233,8 +235,11 @@ function writeSchedule(sheet: GoogleAppsScript.Spreadsheet.Sheet, assignment: Sc
     bodyRange.setValues(gridValues);
     bodyRange
       .setFontWeight("bold")
+      .setFontSize(SCHEDULE_GRID_FONT_SIZE)
+      .setHorizontalAlignment("center")
       .setVerticalAlignment("middle")
       .setBorder(true, true, true, true, true, true);
+    sheet.setRowHeights(headerRow + 1, gridRows, SCHEDULE_BODY_ROW_HEIGHT);
 
     const stationColors = assignment.stationOrder.map(function (_, i) {
       return [STATION_ROW_COLORS[i % STATION_ROW_COLORS.length]];

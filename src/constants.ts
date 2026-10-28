@@ -58,3 +58,15 @@ const STATION_ROW_COLORS: string[] = [
   "#00FFFF",
   "#9900FF",
 ];
+
+// Sized for a schedule that's meant to be printed on a single portrait
+// (vertical) letter-size page and read from a standing distance, not just
+// viewed on screen. (Apps Script has no API for print orientation/scaling
+// itself — that's still a one-time choice in File > Print — but a large,
+// high-contrast grid is what makes "Fit to Width" printing actually
+// legible from a few feet away.)
+const SCHEDULE_TITLE_FONT_SIZE = 26;
+const SCHEDULE_GRID_FONT_SIZE = 16;
+const SCHEDULE_TITLE_ROW_HEIGHT = 50;
+const SCHEDULE_HEADER_ROW_HEIGHT = 46;
+const SCHEDULE_BODY_ROW_HEIGHT = 34;
