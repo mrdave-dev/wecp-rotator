@@ -48,6 +48,10 @@ Open the spreadsheet and use the **WECP** menu:
   the schedule.
 - **Unrotate Rosters** undoes one Rotate Rosters step: the first person
   moves to the end and everyone else moves up a spot.
+- **Add 16 Test Names** is a development/testing helper: appends 16 sample
+  names to the Roster table, cycling through M-F, so Fill Grid/Rotate can be
+  exercised against a nontrivial roster without typing names in by hand. It
+  only adds rows — it never touches what's already there.
 
 Fill Grid and Rotate & Fill both check whether the Schedule grid was
 hand-edited since it was last generated, and confirm before overwriting. They

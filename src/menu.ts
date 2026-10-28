@@ -8,6 +8,8 @@ function onOpen(): void {
     .addSeparator()
     .addItem("Rotate Rosters", "menuRotateRosters")
     .addItem("Unrotate Rosters", "menuUnrotateRosters")
+    .addSeparator()
+    .addItem("Add 16 Test Names", "menuPopulateTestNames")
     .addToUi();
 }
 
@@ -220,6 +222,26 @@ function menuUnrotateRosters(): void {
       return;
     }
     menuRotateOrUnrotate(ui, configSheet, unrotateRosters, "unrotate", "unrotated");
+  } catch (e) {
+    showError(ui, e);
+  }
+}
+
+function menuPopulateTestNames(): void {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const configSheet = requireConfigSheet(ui);
+    if (!configSheet) {
+      return;
+    }
+    populateTestNames(configSheet);
+    ui.alert(
+      "Test names added",
+      "Added " +
+        TEST_NAME_POOL.length +
+        " test names to the Roster table, spread across M-F. Use \"Fill Grid for Upcoming Week\" to see them in the schedule.",
+      ui.ButtonSet.OK
+    );
   } catch (e) {
     showError(ui, e);
   }
